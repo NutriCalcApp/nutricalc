@@ -1,0 +1,15 @@
+{
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "CI=false npx react-scripts@5.0.1 build",
+  "outputDirectory": "build",
+  "functions": {
+    "api/analyze-diet.js": {
+      "maxDuration": 60,
+      "memory": 512
+    },
+    "api/search-foods.js": {
+      "maxDuration": 30,
+      "memory": 256
+    }
+  }
+}

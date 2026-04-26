@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NutriCalc</string>
+    <string name="title_activity_main">NutriCalc</string>
+    <string name="package_name">com.nutricalc.app</string>
+    <string name="custom_url_scheme">com.nutricalc.app</string>
+</resources>
