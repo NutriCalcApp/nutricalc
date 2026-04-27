@@ -114,6 +114,8 @@ const LS = {
 const DB = {
   async saveProfile(uid, d) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, ...d, updated_at:new Date().toISOString() }); },
   async loadProfile(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("*").eq("id",uid).single(); return data; },
+  async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, weight_skip_date:date, updated_at:new Date().toISOString() }); },
+  async loadWeightSkip(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("weight_skip_date").eq("id",uid).single(); return data?.weight_skip_date||null; },
   async saveTargets(uid, tg, ml) {
     if (!supabase) return;
     await supabase.from("user_targets").upsert({ user_id:uid, targets:JSON.stringify(tg), meal_list:JSON.stringify(ml), updated_at:new Date().toISOString() });
@@ -3879,7 +3881,7 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
             <div style={{fontSize:52,marginBottom:16}}>📸</div>
             <div style={{fontWeight:700,fontSize:16,marginBottom:8}}>{lang==="en"?"Take a photo of your meal":"Scatta una foto del tuo pasto"}</div>
             <div style={{fontSize:13,color:C.mid,marginBottom:28,lineHeight:1.6}}>
-              {lang==="en"?"Claude AI identifies foods and estimates quantities. Review and edit before confirming.":"Claude IA identifica gli alimenti e stima le quantità. Verifica e modifica prima di confermare."}
+              {lang==="en"?"AI identifies foods and estimates quantities. Review and edit before confirming.":"L'AI identifica gli alimenti e stima le quantità. Verifica e modifica prima di confermare."}
             </div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} style={{display:"none"}} id="nc2-photo-cam"/>
             <label htmlFor="nc2-photo-cam" style={{...bP,display:"inline-block",cursor:"pointer",width:"auto",padding:"14px 28px",marginBottom:12}}>
@@ -3901,7 +3903,7 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
             {capturedImage&&<img src={capturedImage} style={{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:12,marginBottom:20}} alt=""/>}
             <Spin size={44}/>
             <div style={{fontWeight:700,fontSize:16,marginTop:20,marginBottom:8}}>{lang==="en"?"Analysing meal...":"Analisi pasto in corso..."}</div>
-            <div style={{fontSize:13,color:C.mid,lineHeight:1.6}}>{lang==="en"?"Claude AI is identifying foods and estimating portions.":"Claude IA sta identificando gli alimenti e stimando le porzioni."}</div>
+            <div style={{fontSize:13,color:C.mid,lineHeight:1.6}}>{lang==="en"?"AI is identifying foods and estimating portions.":"L'AI sta identificando gli alimenti e stimando le porzioni."}</div>
           </div>
         )}
 
@@ -5562,7 +5564,7 @@ function ImportDietScreen({lang,mealList,onApply,onApplyToPlan,onBack}) {
           <Spin size={44}/>
           <div style={{fontWeight:700,fontSize:16,marginTop:20,marginBottom:8}}>{t("importAnalyzing",lang)}</div>
           <div style={{fontSize:13,color:C.mid,lineHeight:1.6}}>
-            {lang==="en"?"Claude AI is reading your diet plan. This takes about 10-20 seconds.":"Claude IA sta leggendo il tuo piano alimentare. Richiede circa 10-20 secondi."}
+            {lang==="en"?"AI is reading your diet plan. This takes about 10-20 seconds.":"L'AI sta leggendo il tuo piano alimentare. Richiede circa 10-20 secondi."}
           </div>
         </div>
       )}
@@ -6340,6 +6342,7 @@ export default function App() {
 
       // 3. Carica dati aggiuntivi
       try { const wl=await DB.loadWeightLog(u.id); if(wl?.length){ setWeightLog(wl); LS.s("nc2-weightlog",wl); checkWeightPrompt(wl); } } catch {}
+      try { const wsd=await DB.loadWeightSkip(u.id); if(wsd) LS.s("nc2-weight-skip-date",wsd); } catch {}
       try {
         const pt=await DB.loadPantry(u.id);
         if(pt?.length){
@@ -7167,7 +7170,7 @@ export default function App() {
   return (
     <div key={lang} style={{...ss,paddingBottom:70}}>
       <style>{FONTS}</style>
-      {showWeightModal&&<WeightModal profile={profile} onSave={logWeight} onSkip={()=>{ LS.s("nc2-weight-skip-date",today); setShowWeightModal(false); }} lang={lang}/>}
+      {showWeightModal&&<WeightModal profile={profile} onSave={logWeight} onSkip={()=>{ LS.s("nc2-weight-skip-date",today); setShowWeightModal(false); if(user) DB.saveWeightSkip(user.id,today); }} lang={lang}/>}
       {tab==="today"&&!pantryEditMeal&&<TodayScreen targets={targets} mealList={mealList} meals={meals} weeklyPlan={weeklyPlan} isCustomized={isCustomized} allTot={allTot} planMealTargets={planMealTargets} profile={profile} lang={lang} weightLog={weightLog} confirmedMeals={confirmedMeals} lockedMeals={lockedMeals} onConfirmMeal={confirmMeal} onUnlockMeal={unlockMeal} customFoods={customFoods} onMealClick={name=>{
           const todayIdx2=(new Date().getDay()+6)%7;
           const planDay2=weeklyPlan?weeklyPlan[todayIdx2]:null;
