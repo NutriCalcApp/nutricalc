@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Html5Qrcode } from "html5-qrcode";
 let _lang = localStorage.getItem("nc2-lang")||"it";
+const API_BASE = typeof window !== "undefined" && (window.Capacitor || window.location.protocol === "file:") ? "https://nutricalc-nine.vercel.app" : "";
 
 // Sopprime errori "Lock stolen" di Supabase in development (hot-reload)
 if (typeof window !== 'undefined') {
@@ -1122,7 +1123,7 @@ function parseOFF(p) {
 }
 async function lookupBarcode(code) {
   try {
-    const res = await fetch(`/api/search-foods?type=barcode&code=${encodeURIComponent(code)}`);
+    const res = await fetch(`${API_BASE}/api/search-foods?type=barcode&code=${encodeURIComponent(code)}`);
     const d = await res.json();
     return d.status === 1 ? parseOFF(d.product) : null;
   } catch { return null; }
@@ -1130,7 +1131,7 @@ async function lookupBarcode(code) {
 async function searchOFFText(q) {
   try {
     const lang = localStorage.getItem("nc2-lang") || "it";
-    const res = await fetch(`/api/search-foods?type=text&q=${encodeURIComponent(q)}&lang=${lang}`);
+    const res = await fetch(`${API_BASE}/api/search-foods?type=text&q=${encodeURIComponent(q)}&lang=${lang}`);
     if (!res.ok) return [];
     const d = await res.json();
     const products = d.products || [];
@@ -3816,7 +3817,7 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
         r.onerror=()=>rej(new Error("Read failed"));
         r.readAsDataURL(file);
       });
-      const response=await fetch("/api/analyze-photo",{
+      const response=await fetch(`${API_BASE}/api/analyze-photo`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({imageBase64:base64,imageType,lang})
@@ -5408,7 +5409,7 @@ function ImportDietScreen({lang,mealList,onApply,onApplyToPlan,onBack}) {
         ? mealList.map(m=>m.name).join(", ")
         : "Colazione, Pranzo, Cena";
 
-      const response=await fetch("/api/analyze-diet",{
+      const response=await fetch(`${API_BASE}/api/analyze-diet`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({base64, mealNames:mealNamesStr})
