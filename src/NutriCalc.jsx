@@ -6248,7 +6248,7 @@ export default function App() {
   const [weightLog,setWeightLog]=useState([]);
   const [weeklyPlan,setWeeklyPlan]=useState(()=>LS.g("nc2-weeklyplan"));
   const [planSeed,setPlanSeed]=useState(()=>LS.g("nc2-planseed")||0);
-  const [isCustomized,setIsCustomized]=useState(false);
+  const [isCustomized,setIsCustomized]=useState(()=>LS.g(`nc2-customized-${localDateStr()}`)||false);
   const [tab,setTab]=useState("today");
   const [selMeal,setSelMeal]=useState(null);
   const [photoMealName,setPhotoMealName]=useState(null);
@@ -6322,6 +6322,12 @@ export default function App() {
     return ()=>clearInterval(interval);
   },[]);
 
+  // Persisti isCustomized per giorno in localStorage
+  useEffect(()=>{
+    LS.s(`nc2-customized-${today}`,isCustomized);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[isCustomized]);
+
   // Auto-sync weeklyPlan su Supabase con debounce
   useEffect(()=>{
     if(!user||!weeklyPlan) return;
@@ -6375,10 +6381,13 @@ export default function App() {
         setTargets(tg); setMealList(ml);
         try {
           const ms=await DB.loadMeals(u.id,today);
-          const lsMs=LS.g(`nc2-meals-${u.id}-${today}`);
-          setMeals(ms||lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{}));
+          const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
+          const finalMs=ms||lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{});
+          setMeals(finalMs);
+          // Migra da localStorage a Supabase se Supabase era vuoto
+          if(!ms&&lsMs) DB.saveMeals(u.id,today,lsMs).catch(()=>{});
         } catch {
-          const lsMs=LS.g(`nc2-meals-${u.id}-${today}`);
+          const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
           setMeals(lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{}));
         }
         setOnboarded(true);
@@ -6436,11 +6445,16 @@ export default function App() {
         const _mr=await DB.loadMealRatings(u.id);
         if(_mr&&Object.keys(_mr).length){ setMealRatings(_mr); LS.s("nc2-meal-ratings",_mr); }
       } catch {}
-      // Load weekly plan from Supabase
+      // Load weekly plan from Supabase — se mancante, migra da localStorage
       try {
         const wp=await DB.loadWeeklyPlan(u.id);
         if(wp?.plan){ setWeeklyPlan(wp.plan); LS.s("nc2-weeklyplan",wp.plan); }
-        if(wp?.seed){ setPlanSeed(wp.seed); LS.s("nc2-planseed",wp.seed); }
+        else {
+          const lsWp=LS.g("nc2-weeklyplan");
+          const lsSeed=LS.g("nc2-planseed")||0;
+          if(lsWp){ setWeeklyPlan(lsWp); DB.saveWeeklyPlan(u.id,lsWp,lsSeed).catch(()=>{}); }
+        }
+        if(wp?.seed!=null){ setPlanSeed(wp.seed); LS.s("nc2-planseed",wp.seed); }
       } catch {}
       // Load locked meals for today from Supabase
       try {
@@ -6501,7 +6515,7 @@ export default function App() {
       return updated;
     });
   };
-  const saveMeals=ms=>{ LS.s(`nc2-meals${user?"-"+user.id:""}-${today}`,ms); if(user) DB.saveMeals(user.id,today,ms); };
+  const saveMeals=ms=>{ LS.s(`nc2-meals${user?"-"+user.id:""}-${today}`,ms); if(user) DB.saveMeals(user.id,today,ms).catch(e=>console.error("saveMeals error:",e)); };
   const saveProfile=pr=>{ LS.s(`nc2-profile${user?"-"+user.id:""}`,pr); if(user) DB.saveProfile(user.id,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[],bia_fm:pr.bia_fm||null,bia_vf:pr.bia_vf||null,bia_bmr:pr.bia_bmr||null,bia_ffm:pr.bia_ffm||null,bia_sc_fat:pr.bia_sc_fat||null,bia_smi:pr.bia_smi||null,bia_whr:pr.bia_whr||null,bia_smm:pr.bia_smm||null}); };
 
   const completeOnboarding=(pr,tg,currentUser,presetDiet=null)=>{
@@ -6512,7 +6526,7 @@ export default function App() {
     // Salva profilo su LS e Supabase
     LS.s(`nc2-profile${uid?"-"+uid:""}`,pr);
     LS.s(`nc2-onboarded${uid?"-"+uid:""}`,true); // flag onboarding completato
-    if(uid&&supabase) DB.saveProfile(uid,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[]});
+    if(uid&&supabase) DB.saveProfile(uid,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[],bia_fm:pr.bia_fm||null,bia_vf:pr.bia_vf||null,bia_bmr:pr.bia_bmr||null,bia_ffm:pr.bia_ffm||null,bia_sc_fat:pr.bia_sc_fat||null,bia_smi:pr.bia_smi||null,bia_whr:pr.bia_whr||null,bia_smm:pr.bia_smm||null});
     // Salva targets su LS e Supabase
     LS.s(`nc2-targets${uid?"-"+uid:""}`,tg);
     LS.s(`nc2-meallist${uid?"-"+uid:""}`,ml);
