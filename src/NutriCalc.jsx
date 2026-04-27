@@ -117,6 +117,33 @@ const DB = {
   async loadProfile(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("*").eq("id",uid).single(); return data; },
   async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, weight_skip_date:date, updated_at:new Date().toISOString() }); },
   async loadWeightSkip(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("weight_skip_date").eq("id",uid).single(); return data?.weight_skip_date||null; },
+  async saveWeeklyPlan(uid, plan, seed) {
+    if (!supabase) return;
+    await supabase.from("user_weekly_plan").upsert([{user_id:uid,plan_data:plan,plan_seed:seed||0,updated_at:new Date().toISOString()}],{onConflict:"user_id"});
+  },
+  async loadWeeklyPlan(uid) {
+    if (!supabase) return null;
+    const { data } = await supabase.from("user_weekly_plan").select("*").eq("user_id",uid).single();
+    return data ? { plan:data.plan_data, seed:data.plan_seed||0 } : null;
+  },
+  async saveLockedMeals(uid, date, locked) {
+    if (!supabase) return;
+    await supabase.from("meal_logs").upsert([{user_id:uid,log_date:date,locked_meals:locked}],{onConflict:"user_id,log_date"});
+  },
+  async loadLockedMeals(uid, date) {
+    if (!supabase) return {};
+    const { data } = await supabase.from("meal_logs").select("locked_meals").eq("user_id",uid).eq("log_date",date).single();
+    return data?.locked_meals||{};
+  },
+  async saveSeenIntro(uid) {
+    if (!supabase) return;
+    await supabase.from("profiles").upsert({id:uid,seen_intro:true,updated_at:new Date().toISOString()});
+  },
+  async loadSeenIntro(uid) {
+    if (!supabase) return false;
+    const { data } = await supabase.from("profiles").select("seen_intro").eq("id",uid).single();
+    return !!data?.seen_intro;
+  },
   async saveTargets(uid, tg, ml) {
     if (!supabase) return;
     await supabase.from("user_targets").upsert({ user_id:uid, targets:JSON.stringify(tg), meal_list:JSON.stringify(ml), updated_at:new Date().toISOString() });
@@ -6295,6 +6322,22 @@ export default function App() {
     return ()=>clearInterval(interval);
   },[]);
 
+  // Auto-sync weeklyPlan su Supabase con debounce
+  useEffect(()=>{
+    if(!user||!weeklyPlan) return;
+    const t=setTimeout(()=>{ DB.saveWeeklyPlan(user.id,weeklyPlan,planSeed).catch(()=>{}); },1000);
+    return ()=>clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[weeklyPlan,planSeed,user]);
+
+  // Auto-sync lockedMeals su Supabase con debounce
+  useEffect(()=>{
+    if(!user||!Object.keys(lockedMeals||{}).length) return;
+    const t=setTimeout(()=>{ DB.saveLockedMeals(user.id,today,lockedMeals).catch(()=>{}); },500);
+    return ()=>clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[lockedMeals,user]);
+
   const loadLocal=()=>{
     const pr=LS.g("nc2-profile"), tg=LS.g("nc2-targets"), ml=LS.g("nc2-meallist"), ms=LS.g(`nc2-meals-${today}`), pt=LS.g("nc2-pantry"), wl=LS.g("nc2-weightlog");
     if(pr) setProfile(pr);
@@ -6392,6 +6435,23 @@ export default function App() {
       try {
         const _mr=await DB.loadMealRatings(u.id);
         if(_mr&&Object.keys(_mr).length){ setMealRatings(_mr); LS.s("nc2-meal-ratings",_mr); }
+      } catch {}
+      // Load weekly plan from Supabase
+      try {
+        const wp=await DB.loadWeeklyPlan(u.id);
+        if(wp?.plan){ setWeeklyPlan(wp.plan); LS.s("nc2-weeklyplan",wp.plan); }
+        if(wp?.seed){ setPlanSeed(wp.seed); LS.s("nc2-planseed",wp.seed); }
+      } catch {}
+      // Load locked meals for today from Supabase
+      try {
+        const _todayStr=localDateStr();
+        const locked=await DB.loadLockedMeals(u.id,_todayStr);
+        if(locked&&Object.keys(locked).length){ setLockedMeals(locked); LS.s(`nc2-locked-${_todayStr}`,locked); }
+      } catch {}
+      // Load seen_intro from Supabase
+      try {
+        const si=await DB.loadSeenIntro(u.id);
+        if(si){ LS.s("nc2-seen-intro",true); setShowIntro(false); }
       } catch {}
     } catch(e) {
       console.warn("loadUser error:", e);
@@ -6934,7 +6994,7 @@ export default function App() {
 
   if(!langChosen) return <LangSelectScreen onSelect={selectLang}/>;
   if(!ready) return <div style={{...ss,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}><style>{FONTS}</style><Spin size={32}/></div>;
-  if(showIntro) return <WelcomeSlideshow onDone={()=>{ LS.s('nc2-seen-intro',true); setShowIntro(false); setTab("profile"); }}/>;
+  if(showIntro) return <WelcomeSlideshow onDone={()=>{ LS.s('nc2-seen-intro',true); setShowIntro(false); setTab("profile"); if(user) DB.saveSeenIntro(user.id).catch(()=>{}); }}/>;
   if(supabase&&!user) return <AuthScreen onAuth={loadUser}/>;
   if(!onboarded) return <OnboardingScreen user={user} isNewUser={!LS.g(`nc2-onboarded${user?"-"+user?.id:""}`)} onComplete={(pr,tg,presetDiet)=>completeOnboarding(pr,tg,user,presetDiet)}/>;
 
