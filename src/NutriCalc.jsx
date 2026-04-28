@@ -399,7 +399,7 @@ const PRESET_DIETS = [
 
 // FOOD DATABASE
 const CATEGORY_NAMES_EN = {
-  "Proteine":"Proteins","Carboidrati":"Carbohydrates","Verdure":"Vegetables","Grassi":"Fats","Bevande":"Beverages",
+  "Proteine":"Proteins","Carboidrati":"Carbohydrates","Verdure":"Vegetables","Grassi":"Fats","Latticini":"Dairy","Bevande":"Beverages",
 };
 function getCatName(cat,lang) { const l=lang||(localStorage.getItem("nc2-lang")||"it"); return l==="en" ? (CATEGORY_NAMES_EN[cat]||cat) : cat; }
 function getFoodName(food,lang) { const l=lang||(localStorage.getItem("nc2-lang")||"it"); return l==="en" ? (food.nameEn||food.name) : food.name; }
@@ -3762,11 +3762,11 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
           </div>
         ):(
           <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:12}}>
-            {pantry.length>0&&<button onClick={()=>setCat("__pantry__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__pantry__"?C.acc:C.surf,color:cat==="__pantry__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>🫙 Credenza</button>}
+            {pantry.length>0&&<button onClick={()=>setCat("__pantry__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__pantry__"?C.acc:C.surf,color:cat==="__pantry__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>🫙 {fLang==="en"?"Pantry":"Credenza"}</button>}
             {cats.map(c=>(
-              <button key={c} onClick={()=>setCat(c)} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat===c?C.acc:C.surf,color:cat===c?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>{getCatName(c)}</button>
+              <button key={c} onClick={()=>setCat(c)} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat===c?C.acc:C.surf,color:cat===c?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>{getCatName(c,fLang)}</button>
             ))}
-            {customFoods&&customFoods.length>0&&<button onClick={()=>setCat("__custom__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__custom__"?C.acc:C.surf,color:cat==="__custom__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>⭐ Miei</button>}
+            {customFoods&&customFoods.length>0&&<button onClick={()=>setCat("__custom__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__custom__"?C.acc:C.surf,color:cat==="__custom__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>⭐ {fLang==="en"?"Mine":"Miei"}</button>}
           </div>
         )}
       </div>
@@ -6355,28 +6355,24 @@ export default function App() {
   const loadUser=async(u)=>{
     setUser(u);
     try {
-      // 1. Carica profilo da Supabase
-      const sbP=await DB.loadProfile(u.id);
+      // Wave 1: profile + targets in parallel (independent)
+      const [sbP,sbT]=await Promise.all([
+        DB.loadProfile(u.id).catch(()=>null),
+        DB.loadTargets(u.id).catch(()=>null),
+      ]);
       if(sbP) {
         const pr={name:sbP.name||u.user_metadata?.name||"",gender:sbP.gender||"m",age:sbP.age||"",weight:sbP.weight||"",height:sbP.height||"",bodyFat:sbP.body_fat||"",activity:sbP.activity||1.55,goal:sbP.goal||"lose",numMeals:sbP.num_meals||3,excludedFoods:sbP.excluded_foods||[],bia_fm:sbP.bia_fm||"",bia_vf:sbP.bia_vf||"",bia_bmr:sbP.bia_bmr||"",bia_ffm:sbP.bia_ffm||"",bia_sc_fat:sbP.bia_sc_fat||"",bia_smi:sbP.bia_smi||"",bia_whr:sbP.bia_whr||"",bia_smm:sbP.bia_smm||""};
         setProfile(pr);
-        // Salva su localStorage come cache
         LS.s(`nc2-profile-${u.id}`,pr);
       } else {
-        // Fallback localStorage
         const lsPr=LS.g(`nc2-profile-${u.id}`);
         if(lsPr) setProfile(lsPr);
       }
-
-      // 2. Carica targets da Supabase poi localStorage
       let tg=null, ml=null;
-      try {
-        const sbT=await DB.loadTargets(u.id);
-        if(sbT) { tg=sbT.targets; ml=sbT.mealList; }
-      } catch {}
+      if(sbT) { tg=sbT.targets; ml=sbT.mealList; }
       if(!tg) { tg=LS.g(`nc2-targets-${u.id}`)||LS.g("nc2-targets"); }
       if(!ml) { ml=LS.g(`nc2-meallist-${u.id}`)||LS.g("nc2-meallist"); }
-
+      // Wave 2: meals (depends on mealList from wave 1)
       if(tg&&ml) {
         setTargets(tg); setMealList(ml);
         try {
@@ -6384,7 +6380,6 @@ export default function App() {
           const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
           const finalMs=ms||lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{});
           setMeals(finalMs);
-          // Migra da localStorage a Supabase se Supabase era vuoto
           if(!ms&&lsMs) DB.saveMeals(u.id,today,lsMs).catch(()=>{});
         } catch {
           const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
@@ -6392,106 +6387,67 @@ export default function App() {
         }
         setOnboarded(true);
       }
-
-      // 3. Carica dati aggiuntivi
-      try { const wl=await DB.loadWeightLog(u.id); if(wl?.length){ setWeightLog(wl); LS.s("nc2-weightlog",wl); checkWeightPrompt(wl); } } catch {}
-      try { const wsd=await DB.loadWeightSkip(u.id); if(wsd) LS.s("nc2-weight-skip-date",wsd); } catch {}
-      try {
-        const pt=await DB.loadPantry(u.id);
-        if(pt?.length){
-          // Usa Supabase come fonte autoritativa, ma non sovrascrivere il LS
-          // se il LS ha un timestamp più recente (protezione da race condition Bug 6)
-          const lsPantryTs=LS.g("nc2-pantry-ts")||0;
-          const nowTs=Date.now();
-          // Considera il LS più recente se aggiornato negli ultimi 10s (write in volo)
-          if(nowTs-lsPantryTs>10000){
-            setPantry(pt); LS.s("nc2-pantry",pt); LS.s("nc2-pantry-ts",nowTs);
-          } else {
-            // LS recente: usa LS ma accetta dati Supabase per sicurezza se LS vuoto
-            const lsPt=LS.g("nc2-pantry")||[];
-            setPantry(lsPt.length?lsPt:pt);
-          }
-        }
-      } catch {}
-      try { const fav=await DB.loadFavMeals(u.id); if(fav?.length){ setFavMeals(fav); LS.s("nc2-favmeals",fav); } } catch {}
-      try { const cf=await DB.loadCustomFoods(u.id); if(cf?.length){ setCustomFoods(cf); LS.s("nc2-customfoods",cf); } } catch {}
-      try {
-        // USA localDateStr per fromDate — evita sfasamento UTC vs locale (bug Europa UTC+2)
-        const _f30=new Date(); _f30.setDate(_f30.getDate()-30);
-        const _from30Str=`${_f30.getFullYear()}-${String(_f30.getMonth()+1).padStart(2,'0')}-${String(_f30.getDate()).padStart(2,'0')}`;
-        const nl=await DB.loadNutritionLogs(u.id,_from30Str);
-        if(nl){
-          setNutritionLogs(nl);
-          // Ricostruisci confirmedMeals per oggi dai log Supabase
-          const todayStr=localDateStr();
-          const todayLogs=nl.filter(l=>l.date===todayStr);
-          if(todayLogs.length>0){
-            const rebuilt=todayLogs.reduce((acc,l)=>({...acc,[l.mealName]:true}),{});
-            setConfirmedMeals(rebuilt);
-            LS.s(`nc2-confirmed-${todayStr}`,rebuilt);
-          }
-        }
-        try { const sp=await DB.loadPlans(u.id); if(sp) setSavedPlans(sp); } catch {}
-      } catch {}
-      // Load workout logs from Supabase
-      try {
-        const _fw30=new Date(); _fw30.setDate(_fw30.getDate()-30);
-        const _from30wStr=`${_fw30.getFullYear()}-${String(_fw30.getMonth()+1).padStart(2,'0')}-${String(_fw30.getDate()).padStart(2,'0')}`;
-        const _wls=await DB.loadWorkoutLogs(u.id,_from30wStr);
-        if(_wls&&_wls.length){ setWorkoutLogs(_wls); LS.s("nc2-workouts",_wls); }
-      } catch {}
-      // Load meal ratings from Supabase
-      try {
-        const _mr=await DB.loadMealRatings(u.id);
-        if(_mr&&Object.keys(_mr).length){ setMealRatings(_mr); LS.s("nc2-meal-ratings",_mr); }
-      } catch {}
-      // Load weekly plan from Supabase — se mancante, migra da localStorage
-      try {
-        const wp=await DB.loadWeeklyPlan(u.id);
-        if(wp?.plan){ setWeeklyPlan(wp.plan); LS.s("nc2-weeklyplan",wp.plan); }
-        else {
-          const lsWp=LS.g("nc2-weeklyplan");
-          const lsSeed=LS.g("nc2-planseed")||0;
-          if(lsWp){ setWeeklyPlan(lsWp); DB.saveWeeklyPlan(u.id,lsWp,lsSeed).catch(()=>{}); }
-        }
-        if(wp?.seed!=null){ setPlanSeed(wp.seed); LS.s("nc2-planseed",wp.seed); }
-      } catch {}
-      // Load locked meals for today from Supabase
-      try {
-        const _todayStr=localDateStr();
-        const locked=await DB.loadLockedMeals(u.id,_todayStr);
-        if(locked&&Object.keys(locked).length){ setLockedMeals(locked); LS.s(`nc2-locked-${_todayStr}`,locked); }
-      } catch {}
-      // Load seen_intro from Supabase
-      try {
-        const si=await DB.loadSeenIntro(u.id);
-        if(si){ LS.s("nc2-seen-intro",true); setShowIntro(false); }
-      } catch {}
     } catch(e) {
       console.warn("loadUser error:", e);
     }
-    // Fallback: ricostruisci confirmedMeals da LS se Supabase non ha restituito logs
+    // LS fallbacks (sync, fast) — seed UI before background fetches arrive
     const todayStr2=localDateStr();
     const lsConfirmed=LS.g(`nc2-confirmed-${todayStr2}`);
     if(lsConfirmed&&Object.keys(lsConfirmed).length>0){
       setConfirmedMeals(prev=>Object.keys(prev).length>0?prev:lsConfirmed);
     }
-    // Merge LS + Supabase: integra i log mancanti dal backup locale
-    // Questo gestisce il caso in cui Supabase abbia salvato solo parte dei pasti
     const lsLogs=LS.g("nc2-nutrition-logs-all");
-    if(lsLogs?.length){
-      setNutritionLogs(prev=>{
-        if(!prev.length) return lsLogs;
-        // Aggiungi dal LS solo le entries non presenti in Supabase
-        const key=l=>`${l.date}|${l.mealName}`;
-        const sbKeys=new Set(prev.map(key));
-        const missing=lsLogs.filter(l=>!sbKeys.has(key(l)));
-        return missing.length>0?[...prev,...missing]:prev;
-      });
-    }
+    if(lsLogs?.length){ setNutritionLogs(prev=>prev.length?prev:lsLogs); }
     LS.s('nc2-seen-intro',true);
     setShowIntro(false);
+    // UI is interactive now — secondary data loads in background
     setReady(true);
+    // Wave 3: all remaining fetches in parallel, non-blocking
+    const _f30=new Date(); _f30.setDate(_f30.getDate()-30);
+    const _from30Str=`${_f30.getFullYear()}-${String(_f30.getMonth()+1).padStart(2,'0')}-${String(_f30.getDate()).padStart(2,'0')}`;
+    const _fw30=new Date(); _fw30.setDate(_fw30.getDate()-30);
+    const _from30wStr=`${_fw30.getFullYear()}-${String(_fw30.getMonth()+1).padStart(2,'0')}-${String(_fw30.getDate()).padStart(2,'0')}`;
+    const _todayStr=localDateStr();
+    Promise.all([
+      DB.loadWeightLog(u.id).then(wl=>{ if(wl?.length){ setWeightLog(wl); LS.s("nc2-weightlog",wl); checkWeightPrompt(wl); }}).catch(()=>{}),
+      DB.loadWeightSkip(u.id).then(wsd=>{ if(wsd) LS.s("nc2-weight-skip-date",wsd); }).catch(()=>{}),
+      DB.loadPantry(u.id).then(pt=>{
+        if(pt?.length){
+          const lsPantryTs=LS.g("nc2-pantry-ts")||0; const nowTs=Date.now();
+          if(nowTs-lsPantryTs>10000){ setPantry(pt); LS.s("nc2-pantry",pt); LS.s("nc2-pantry-ts",nowTs); }
+          else { const lsPt=LS.g("nc2-pantry")||[]; setPantry(lsPt.length?lsPt:pt); }
+        }
+      }).catch(()=>{}),
+      DB.loadFavMeals(u.id).then(fav=>{ if(fav?.length){ setFavMeals(fav); LS.s("nc2-favmeals",fav); }}).catch(()=>{}),
+      DB.loadCustomFoods(u.id).then(cf=>{ if(cf?.length){ setCustomFoods(cf); LS.s("nc2-customfoods",cf); }}).catch(()=>{}),
+      DB.loadNutritionLogs(u.id,_from30Str).then(async nl=>{
+        if(nl){
+          const todayStr=localDateStr();
+          const todayLogs=nl.filter(l=>l.date===todayStr);
+          if(todayLogs.length>0){
+            const rebuilt=todayLogs.reduce((acc,l)=>({...acc,[l.mealName]:true}),{});
+            setConfirmedMeals(rebuilt); LS.s(`nc2-confirmed-${todayStr}`,rebuilt);
+          }
+          const _lsLogs=LS.g("nc2-nutrition-logs-all");
+          if(_lsLogs?.length){
+            const key=l=>`${l.date}|${l.mealName}`;
+            const sbKeys=new Set(nl.map(key));
+            const missing=_lsLogs.filter(l=>!sbKeys.has(key(l)));
+            setNutritionLogs(missing.length>0?[...nl,...missing]:nl);
+          } else { setNutritionLogs(nl); }
+          try { const sp=await DB.loadPlans(u.id); if(sp) setSavedPlans(sp); } catch {}
+        }
+      }).catch(()=>{}),
+      DB.loadWorkoutLogs(u.id,_from30wStr).then(_wls=>{ if(_wls&&_wls.length){ setWorkoutLogs(_wls); LS.s("nc2-workouts",_wls); }}).catch(()=>{}),
+      DB.loadMealRatings(u.id).then(_mr=>{ if(_mr&&Object.keys(_mr).length){ setMealRatings(_mr); LS.s("nc2-meal-ratings",_mr); }}).catch(()=>{}),
+      DB.loadWeeklyPlan(u.id).then(wp=>{
+        if(wp?.plan){ setWeeklyPlan(wp.plan); LS.s("nc2-weeklyplan",wp.plan); }
+        else { const lsWp=LS.g("nc2-weeklyplan"); const lsSeed=LS.g("nc2-planseed")||0; if(lsWp){ setWeeklyPlan(lsWp); DB.saveWeeklyPlan(u.id,lsWp,lsSeed).catch(()=>{}); } }
+        if(wp?.seed!=null){ setPlanSeed(wp.seed); LS.s("nc2-planseed",wp.seed); }
+      }).catch(()=>{}),
+      DB.loadLockedMeals(u.id,_todayStr).then(locked=>{ if(locked&&Object.keys(locked).length){ setLockedMeals(locked); LS.s(`nc2-locked-${_todayStr}`,locked); }}).catch(()=>{}),
+      DB.loadSeenIntro(u.id).then(si=>{ if(si){ LS.s("nc2-seen-intro",true); setShowIntro(false); }}).catch(()=>{}),
+    ]);
   };
 
   const checkWeightPrompt=wl=>{
@@ -6887,6 +6843,15 @@ export default function App() {
     document.body.appendChild(_el); setTimeout(()=>_el.remove(),2500);
   };
 
+  // Costruisce snapshot completo: merge meals state + piano per slot vuoti
+  const buildMealSnapshot=(planDayNow,name,items)=>{
+    const allKeys=new Set([...Object.keys(meals),...(planDayNow?Object.keys(planDayNow):[])]);
+    const snap={};
+    allKeys.forEach(k=>{ snap[k]=(meals[k]||[]).length>0?meals[k]:(planDayNow?.[k]||[]); });
+    snap[name]=items;
+    return snap;
+  };
+
   const addFood=(name,food)=>{
     const todayIdx2=(new Date().getDay()+6)%7;
     const planDayNow=weeklyPlan?weeklyPlan[todayIdx2]:null;
@@ -6909,7 +6874,7 @@ export default function App() {
       } else { initQty=100; }
     }
     const items=[...baseItems,{food,quantity:initQty}];
-    const nm={...meals,[name]:items};
+    const nm=buildMealSnapshot(planDayNow,name,items);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6921,7 +6886,7 @@ export default function App() {
     const planDayNow=weeklyPlan?weeklyPlan[todayIdx2]:null;
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     const merged=[...baseItems,...newItems];
-    const nm={...meals,[name]:merged};
+    const nm=buildMealSnapshot(planDayNow,name,merged);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:merged}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6934,7 +6899,7 @@ export default function App() {
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     // NON ricalcolare le rimanenti — rimuove solo l'elemento indicato
     const items=baseItems.filter((_,i)=>i!==idx);
-    const nm={...meals,[name]:items};
+    const nm=buildMealSnapshot(planDayNow,name,items);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6946,7 +6911,7 @@ export default function App() {
     const planDayNow=weeklyPlan?weeklyPlan[todayIdx2]:null;
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     const u=[...baseItems]; u[idx]={...u[idx],quantity:Math.max(0,parseInt(qty)||0)};
-    const nm={...meals,[name]:u};
+    const nm=buildMealSnapshot(planDayNow,name,u);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6959,7 +6924,7 @@ export default function App() {
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     const u=[...baseItems]; const def=unit==="pz"?1:100;
     u[idx]={...u[idx],food:{...u[idx].food,unit},quantity:def};
-    const nm={...meals,[name]:u};
+    const nm=buildMealSnapshot(planDayNow,name,u);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
