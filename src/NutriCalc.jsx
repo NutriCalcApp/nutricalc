@@ -6956,9 +6956,7 @@ export default function App() {
   const manualLogWeight=()=>{ const w=parseFloat(newWeight); if(w&&w>30&&w<300){logWeight(w);setNewWeight("");} };
 
   const handleLogout=async()=>{
-    if(supabase) await supabase.auth.signOut();
-    // Resetta solo user e onboarded per tornare al login
-    // I dati rimangono su Supabase e vengono ricaricati al prossimo login
+    try { if(supabase) await supabase.auth.signOut(); } catch(e) { console.warn("signOut error:",e); }
     setUser(null); setOnboarded(false);
   };
   const handleReset=()=>{
