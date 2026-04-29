@@ -6354,54 +6354,84 @@ export default function App() {
 
   const loadUser=async(u)=>{
     setUser(u);
-    try {
-      // Wave 1: profile + targets in parallel (independent)
-      const [sbP,sbT]=await Promise.all([
-        DB.loadProfile(u.id).catch(()=>null),
-        DB.loadTargets(u.id).catch(()=>null),
-      ]);
-      if(sbP) {
-        const pr={name:sbP.name||u.user_metadata?.name||"",gender:sbP.gender||"m",age:sbP.age||"",weight:sbP.weight||"",height:sbP.height||"",bodyFat:sbP.body_fat||"",activity:sbP.activity||1.55,goal:sbP.goal||"lose",numMeals:sbP.num_meals||3,excludedFoods:sbP.excluded_foods||[],bia_fm:sbP.bia_fm||"",bia_vf:sbP.bia_vf||"",bia_bmr:sbP.bia_bmr||"",bia_ffm:sbP.bia_ffm||"",bia_sc_fat:sbP.bia_sc_fat||"",bia_smi:sbP.bia_smi||"",bia_whr:sbP.bia_whr||"",bia_smm:sbP.bia_smm||""};
-        setProfile(pr);
-        LS.s(`nc2-profile-${u.id}`,pr);
-      } else {
-        const lsPr=LS.g(`nc2-profile-${u.id}`);
-        if(lsPr) setProfile(lsPr);
-      }
-      let tg=null, ml=null;
-      if(sbT) { tg=sbT.targets; ml=sbT.mealList; }
-      if(!tg) { tg=LS.g(`nc2-targets-${u.id}`)||LS.g("nc2-targets"); }
-      if(!ml) { ml=LS.g(`nc2-meallist-${u.id}`)||LS.g("nc2-meallist"); }
-      // Wave 2: meals (depends on mealList from wave 1)
-      if(tg&&ml) {
-        setTargets(tg); setMealList(ml);
-        try {
-          const ms=await DB.loadMeals(u.id,today);
-          const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
-          const finalMs=ms||lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{});
-          setMeals(finalMs);
-          if(!ms&&lsMs) DB.saveMeals(u.id,today,lsMs).catch(()=>{});
-        } catch {
-          const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
-          setMeals(lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{}));
+    // Fast path: restore from localStorage immediately (stale-while-revalidate)
+    const _lsPr=LS.g(`nc2-profile-${u.id}`);
+    const _lsTg=LS.g(`nc2-targets-${u.id}`)||LS.g("nc2-targets");
+    const _lsMl=LS.g(`nc2-meallist-${u.id}`)||LS.g("nc2-meallist");
+    const _lsCacheHit=!!(_lsTg&&_lsMl);
+    if(_lsPr) setProfile(_lsPr);
+    if(_lsCacheHit){
+      setTargets(_lsTg); setMealList(_lsMl);
+      const _lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
+      setMeals(_lsMs||_lsMl.reduce((a,x)=>({...a,[x.name]:[]}),{}));
+      setOnboarded(true);
+      const _lsConf=LS.g(`nc2-confirmed-${localDateStr()}`);
+      if(_lsConf&&Object.keys(_lsConf).length>0) setConfirmedMeals(_lsConf);
+      const _lsLogs=LS.g("nc2-nutrition-logs-all");
+      if(_lsLogs?.length) setNutritionLogs(_lsLogs);
+      LS.s('nc2-seen-intro',true); setShowIntro(false);
+      setReady(true); // show UI immediately from cache — Supabase refreshes in background
+    }
+    // Background Supabase refresh (waves 1+2 merged into background when cache hit)
+    if(_lsCacheHit){
+      Promise.all([
+        DB.loadProfile(u.id).then(sbP=>{
+          if(!sbP) return;
+          const pr={name:sbP.name||u.user_metadata?.name||"",gender:sbP.gender||"m",age:sbP.age||"",weight:sbP.weight||"",height:sbP.height||"",bodyFat:sbP.body_fat||"",activity:sbP.activity||1.55,goal:sbP.goal||"lose",numMeals:sbP.num_meals||3,excludedFoods:sbP.excluded_foods||[],bia_fm:sbP.bia_fm||"",bia_vf:sbP.bia_vf||"",bia_bmr:sbP.bia_bmr||"",bia_ffm:sbP.bia_ffm||"",bia_sc_fat:sbP.bia_sc_fat||"",bia_smi:sbP.bia_smi||"",bia_whr:sbP.bia_whr||"",bia_smm:sbP.bia_smm||""};
+          setProfile(pr); LS.s(`nc2-profile-${u.id}`,pr);
+        }).catch(()=>{}),
+        DB.loadTargets(u.id).then(sbT=>{
+          if(!sbT) return;
+          setTargets(sbT.targets); setMealList(sbT.mealList);
+          LS.s(`nc2-targets-${u.id}`,sbT.targets); LS.s(`nc2-meallist-${u.id}`,sbT.mealList);
+        }).catch(()=>{}),
+        DB.loadMeals(u.id,today).then(ms=>{
+          if(!ms) return;
+          setMeals(ms); LS.s(`nc2-meals-${u.id}-${today}`,ms);
+        }).catch(()=>{}),
+      ]).catch(()=>{});
+    } else {
+      // No cache — must wait for Supabase before showing UI (first install path)
+      try {
+        const [sbP,sbT]=await Promise.all([
+          DB.loadProfile(u.id).catch(()=>null),
+          DB.loadTargets(u.id).catch(()=>null),
+        ]);
+        if(sbP) {
+          const pr={name:sbP.name||u.user_metadata?.name||"",gender:sbP.gender||"m",age:sbP.age||"",weight:sbP.weight||"",height:sbP.height||"",bodyFat:sbP.body_fat||"",activity:sbP.activity||1.55,goal:sbP.goal||"lose",numMeals:sbP.num_meals||3,excludedFoods:sbP.excluded_foods||[],bia_fm:sbP.bia_fm||"",bia_vf:sbP.bia_vf||"",bia_bmr:sbP.bia_bmr||"",bia_ffm:sbP.bia_ffm||"",bia_sc_fat:sbP.bia_sc_fat||"",bia_smi:sbP.bia_smi||"",bia_whr:sbP.bia_whr||"",bia_smm:sbP.bia_smm||""};
+          setProfile(pr); LS.s(`nc2-profile-${u.id}`,pr);
+        } else {
+          const lsPr=LS.g(`nc2-profile-${u.id}`); if(lsPr) setProfile(lsPr);
         }
-        setOnboarded(true);
+        let tg=null, ml=null;
+        if(sbT) { tg=sbT.targets; ml=sbT.mealList; }
+        if(!tg) { tg=LS.g(`nc2-targets-${u.id}`)||LS.g("nc2-targets"); }
+        if(!ml) { ml=LS.g(`nc2-meallist-${u.id}`)||LS.g("nc2-meallist"); }
+        if(tg&&ml) {
+          setTargets(tg); setMealList(ml);
+          try {
+            const ms=await DB.loadMeals(u.id,today);
+            const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
+            const finalMs=ms||lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{});
+            setMeals(finalMs);
+            if(!ms&&lsMs) DB.saveMeals(u.id,today,lsMs).catch(()=>{});
+          } catch {
+            const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
+            setMeals(lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{}));
+          }
+          setOnboarded(true);
+        }
+      } catch(e) { console.warn("loadUser error:", e); }
+      const todayStr2=localDateStr();
+      const lsConfirmed=LS.g(`nc2-confirmed-${todayStr2}`);
+      if(lsConfirmed&&Object.keys(lsConfirmed).length>0){
+        setConfirmedMeals(prev=>Object.keys(prev).length>0?prev:lsConfirmed);
       }
-    } catch(e) {
-      console.warn("loadUser error:", e);
+      const lsLogs=LS.g("nc2-nutrition-logs-all");
+      if(lsLogs?.length){ setNutritionLogs(prev=>prev.length?prev:lsLogs); }
+      LS.s('nc2-seen-intro',true); setShowIntro(false);
+      setReady(true);
     }
-    // LS fallbacks (sync, fast) — seed UI before background fetches arrive
-    const todayStr2=localDateStr();
-    const lsConfirmed=LS.g(`nc2-confirmed-${todayStr2}`);
-    if(lsConfirmed&&Object.keys(lsConfirmed).length>0){
-      setConfirmedMeals(prev=>Object.keys(prev).length>0?prev:lsConfirmed);
-    }
-    const lsLogs=LS.g("nc2-nutrition-logs-all");
-    if(lsLogs?.length){ setNutritionLogs(prev=>prev.length?prev:lsLogs); }
-    LS.s('nc2-seen-intro',true);
-    setShowIntro(false);
-    // UI is interactive now — secondary data loads in background
-    setReady(true);
     // Wave 3: all remaining fetches in parallel, non-blocking
     const _f30=new Date(); _f30.setDate(_f30.getDate()-30);
     const _from30Str=`${_f30.getFullYear()}-${String(_f30.getMonth()+1).padStart(2,'0')}-${String(_f30.getDate()).padStart(2,'0')}`;
