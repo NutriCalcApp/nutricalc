@@ -6477,7 +6477,7 @@ export default function App() {
       }).catch(()=>{}),
       DB.loadLockedMeals(u.id,_todayStr).then(locked=>{ if(locked&&Object.keys(locked).length){ setLockedMeals(locked); LS.s(`nc2-locked-${_todayStr}`,locked); }}).catch(()=>{}),
       DB.loadSeenIntro(u.id).then(si=>{ if(si){ LS.s("nc2-seen-intro",true); setShowIntro(false); }}).catch(()=>{}),
-    ]);
+    ]).catch(e=>console.error("loadUser wave3 error:",e));
   };
 
   const checkWeightPrompt=wl=>{
@@ -6502,7 +6502,15 @@ export default function App() {
     });
   };
   const saveMeals=ms=>{ LS.s(`nc2-meals${user?"-"+user.id:""}-${today}`,ms); if(user) DB.saveMeals(user.id,today,ms).catch(e=>console.error("saveMeals error:",e)); };
-  const saveProfile=pr=>{ LS.s(`nc2-profile${user?"-"+user.id:""}`,pr); if(user) DB.saveProfile(user.id,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[],bia_fm:pr.bia_fm||null,bia_vf:pr.bia_vf||null,bia_bmr:pr.bia_bmr||null,bia_ffm:pr.bia_ffm||null,bia_sc_fat:pr.bia_sc_fat||null,bia_smi:pr.bia_smi||null,bia_whr:pr.bia_whr||null,bia_smm:pr.bia_smm||null}); };
+  const profileToDB = pr => ({
+    name: pr.name, gender: pr.gender, age: pr.age, weight: pr.weight,
+    height: pr.height, body_fat: pr.bodyFat||null, activity: pr.activity,
+    goal: pr.goal, num_meals: pr.numMeals, excluded_foods: pr.excludedFoods||[],
+    bia_fm: pr.bia_fm||null, bia_vf: pr.bia_vf||null, bia_bmr: pr.bia_bmr||null,
+    bia_ffm: pr.bia_ffm||null, bia_sc_fat: pr.bia_sc_fat||null,
+    bia_smi: pr.bia_smi||null, bia_whr: pr.bia_whr||null, bia_smm: pr.bia_smm||null,
+  });
+  const saveProfile=pr=>{ LS.s(`nc2-profile${user?"-"+user.id:""}`,pr); if(user) DB.saveProfile(user.id,profileToDB(pr)).catch(e=>console.error("saveProfile error:",e)); };
 
   const completeOnboarding=(pr,tg,currentUser,presetDiet=null)=>{
     const ml=MEAL_CONFIGS[pr.numMeals];
@@ -6512,7 +6520,7 @@ export default function App() {
     // Salva profilo su LS e Supabase
     LS.s(`nc2-profile${uid?"-"+uid:""}`,pr);
     LS.s(`nc2-onboarded${uid?"-"+uid:""}`,true); // flag onboarding completato
-    if(uid&&supabase) DB.saveProfile(uid,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[],bia_fm:pr.bia_fm||null,bia_vf:pr.bia_vf||null,bia_bmr:pr.bia_bmr||null,bia_ffm:pr.bia_ffm||null,bia_sc_fat:pr.bia_sc_fat||null,bia_smi:pr.bia_smi||null,bia_whr:pr.bia_whr||null,bia_smm:pr.bia_smm||null});
+    if(uid&&supabase) DB.saveProfile(uid,profileToDB(pr)).catch(e=>console.error("saveProfile error:",e));
     // Salva targets su LS e Supabase
     LS.s(`nc2-targets${uid?"-"+uid:""}`,tg);
     LS.s(`nc2-meallist${uid?"-"+uid:""}`,ml);
@@ -6534,7 +6542,9 @@ export default function App() {
         });
         return dayMeals;
       });
-      setWeeklyPlan(newPlan); LS.s("nc2-weeklyplan",newPlan);
+      setWeeklyPlan(newPlan);
+      LS.s("nc2-weeklyplan",newPlan);
+      if(uid&&supabase) DB.saveWeeklyPlan(uid,newPlan,0).catch(e=>console.error("saveWeeklyPlan error:",e));
     }
     setTimeout(()=>setTab("today"),100);
   };
@@ -6987,7 +6997,19 @@ export default function App() {
 
   const handleLogout=async()=>{
     try { if(supabase) await supabase.auth.signOut(); } catch(e) { console.warn("signOut error:",e); }
-    setUser(null); setOnboarded(false);
+    setUser(null);
+    setOnboarded(false);
+    setProfile({ name:"", gender:"m", age:"", weight:"", height:"", bodyFat:"", activity:1.55, goal:"lose", numMeals:3, excludedFoods:[], bia_fm:"", bia_vf:"", bia_bmr:"", bia_ffm:"", bia_sc_fat:"", bia_smi:"", bia_whr:"", bia_smm:"" });
+    setTargets(null);
+    setMealList([]);
+    setMeals({});
+    setPantry([]);
+    setWeightLog([]);
+    setWeeklyPlan(null);
+    setPlanSeed(0);
+    setFavMeals([]);
+    setNutritionLogs([]);
+    setConfirmedMeals({});
   };
   const handleReset=()=>{
     const keys=["nc2-profile","nc2-targets","nc2-meallist","nc2-pantry","nc2-weightlog","nc2-weeklyplan","nc2-planseed"];

@@ -1,6 +1,9 @@
+/* eslint-disable */
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Html5Qrcode } from "html5-qrcode";
+let _lang = localStorage.getItem("nc2-lang")||"it";
+const API_BASE = typeof window !== "undefined" && (window.Capacitor || window.location.protocol === "file:") ? "https://nutricalc-nine.vercel.app" : "";
 
 // Sopprime errori "Lock stolen" di Supabase in development (hot-reload)
 if (typeof window !== 'undefined') {
@@ -52,14 +55,23 @@ const localDateStr=()=>{
 
 // DESIGN SYSTEM
 const C = {
-  bg:"#0D1117", surf:"#161B22", card:"#1C2333", cardHi:"#1F2D3D",
-  bord:"#30363D", bord2:"#3D4451",
-  acc:"#00D563", aLo:"#00D56318", aLo2:"#00D56328",
-  blu:"#58A6FF", bLo:"#58A6FF18",
-  ora:"#FFA657", oLo:"#FFA65718",
-  red:"#F85149", rLo:"#F8514918",
-  yel:"#D29922", yLo:"#D2992218",
-  txt:"#E6EDF3", mid:"#8B949E", dim:"#21262D",
+  bg:"#04090F", surf:"#0A1929", card:"#0F2235", cardHi:"#152D44",
+  bord:"#1A3448", bord2:"#234560",
+  acc:"#2DD4BF", aLo:"#2DD4BF15", aLo2:"#2DD4BF25",
+  blu:"#60A5FA", bLo:"#60A5FA15",
+  ora:"#FBBF24", oLo:"#FBBF2415",
+  red:"#F87171", rLo:"#F8717115",
+  yel:"#FDE68A", yLo:"#FDE68A15",
+  pur:"#A78BFA", pLo:"#A78BFA15",
+  txt:"#EEF4FB", mid:"#5B7F9A", dim:"#0C1822",
+  g1:"#2DD4BF", g2:"#60A5FA",
+  mCol:(name)=>{
+    const n=(name||"").toLowerCase();
+    if(["colazione","breakfast"].some(k=>n.includes(k))) return "#FBBF24";
+    if(["pranzo","lunch"].some(k=>n.includes(k))) return "#2DD4BF";
+    if(["cena","dinner"].some(k=>n.includes(k))) return "#60A5FA";
+    return "#A78BFA";
+  },
 };
 const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900&display=swap');
@@ -67,16 +79,28 @@ const FONTS = `
 input::-webkit-inner-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 ::-webkit-scrollbar{display:none}
-@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes scanBar{0%,100%{top:8%}50%{top:72%}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-@keyframes glow{0%,100%{box-shadow:0 0 0 0 #10F07A00}50%{box-shadow:0 0 18px 4px #10F07A44}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 #2DD4BF00}50%{box-shadow:0 0 28px 8px #2DD4BF44}}
+@keyframes glowBar{0%,100%{box-shadow:0 0 0 0 #2DD4BF00}50%{box-shadow:0 0 10px 2px #2DD4BF66}}
+@keyframes heroShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes numPop{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+@keyframes ringFill{from{stroke-dasharray:0 1000}to{}}
+@keyframes slideRight{from{width:0}to{}}
+@keyframes barShimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 `;
 const ff = "'Plus Jakarta Sans',system-ui,sans-serif";
 const ss = { background:C.bg, minHeight:"100vh", color:C.txt, fontFamily:ff, maxWidth:430, margin:"0 auto" };
-const cS = { background:C.card, borderRadius:20, border:`1px solid ${C.bord}`, padding:"18px 20px", marginBottom:12, boxShadow:"0 1px 4px rgba(0,0,0,.06)" };
-const bP = { width:"100%", padding:"16px 24px", background:C.acc, color:"#0D1117", border:"none", borderRadius:18, fontWeight:800, fontSize:16, cursor:"pointer", fontFamily:ff, letterSpacing:-0.2, transition:"opacity .15s" };
+const cS = {
+  background:`linear-gradient(145deg, ${C.card} 0%, ${C.surf} 100%)`,
+  borderRadius:24, border:`1px solid ${C.bord}`,
+  padding:"18px 20px", marginBottom:14,
+  boxShadow:"0 4px 24px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.04) inset",
+};
+const bP = { width:"100%", padding:"16px 24px", background:`linear-gradient(135deg, ${C.acc} 0%, #00C488 100%)`, color:"#07100D", border:"none", borderRadius:18, fontWeight:900, fontSize:16, cursor:"pointer", fontFamily:ff, letterSpacing:-0.2, transition:"opacity .15s, transform .1s", boxShadow:`0 6px 24px ${C.acc}55` };
 const bS = { width:"100%", padding:"14px 24px", background:C.surf, color:C.txt, border:`1.5px solid ${C.bord2}`, borderRadius:18, fontWeight:700, fontSize:15, cursor:"pointer", fontFamily:ff };
 const inp = { width:"100%", background:C.surf, border:`1.5px solid ${C.bord}`, borderRadius:14, padding:"13px 16px", color:C.txt, fontSize:15, outline:"none", fontFamily:ff, fontWeight:500 };
 const rnd = n => Math.round(n);
@@ -89,8 +113,37 @@ const LS = {
 
 // SUPABASE LAYER
 const DB = {
-  async saveProfile(uid, d) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, ...d, updated_at:new Date().toISOString() }); },
-  async loadProfile(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("*").eq("id",uid).single(); return data; },
+  async saveProfile(uid, d) { if (!supabase) return; const { error } = await supabase.from("profiles").upsert({ id:uid, ...d, updated_at:new Date().toISOString() }); if (error) console.error("saveProfile error:", error); },
+  async loadProfile(uid) { if (!supabase) return null; const { data, error } = await supabase.from("profiles").select("*").eq("id",uid).single(); if (error && error.code !== 'PGRST116') console.error("loadProfile error:", error); return data || null; },
+  async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, weight_skip_date:date, updated_at:new Date().toISOString() }); },
+  async loadWeightSkip(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("weight_skip_date").eq("id",uid).single(); return data?.weight_skip_date||null; },
+  async saveWeeklyPlan(uid, plan, seed) {
+    if (!supabase) return;
+    await supabase.from("user_weekly_plan").upsert([{user_id:uid,plan_data:plan,plan_seed:seed||0,updated_at:new Date().toISOString()}],{onConflict:"user_id"});
+  },
+  async loadWeeklyPlan(uid) {
+    if (!supabase) return null;
+    const { data } = await supabase.from("user_weekly_plan").select("*").eq("user_id",uid).single();
+    return data ? { plan:data.plan_data, seed:data.plan_seed||0 } : null;
+  },
+  async saveLockedMeals(uid, date, locked) {
+    if (!supabase) return;
+    await supabase.from("meal_logs").upsert([{user_id:uid,log_date:date,locked_meals:locked}],{onConflict:"user_id,log_date"});
+  },
+  async loadLockedMeals(uid, date) {
+    if (!supabase) return {};
+    const { data } = await supabase.from("meal_logs").select("locked_meals").eq("user_id",uid).eq("log_date",date).single();
+    return data?.locked_meals||{};
+  },
+  async saveSeenIntro(uid) {
+    if (!supabase) return;
+    await supabase.from("profiles").upsert({id:uid,seen_intro:true,updated_at:new Date().toISOString()});
+  },
+  async loadSeenIntro(uid) {
+    if (!supabase) return false;
+    const { data } = await supabase.from("profiles").select("seen_intro").eq("id",uid).single();
+    return !!data?.seen_intro;
+  },
   async saveTargets(uid, tg, ml) {
     if (!supabase) return;
     await supabase.from("user_targets").upsert({ user_id:uid, targets:JSON.stringify(tg), meal_list:JSON.stringify(ml), updated_at:new Date().toISOString() });
@@ -118,8 +171,12 @@ const DB = {
   async loadPantry(uid) { if (!supabase) return []; const { data } = await supabase.from("pantry").select("*").eq("user_id",uid); return data ? data.map(d=>({id:d.pid||d.id,food:d.food,qty:d.qty,unit:d.unit})) : []; },
   async saveMeals(uid, date, meals) {
     if (!supabase) return;
-    await supabase.from("meal_logs").delete().eq("user_id",uid).eq("log_date",date);
-    await supabase.from("meal_logs").insert([{user_id:uid,log_date:date,meals:JSON.stringify(meals)}]);
+    const { error } = await supabase.from("meal_logs")
+      .upsert([{user_id:uid,log_date:date,meals:JSON.stringify(meals)}],{onConflict:"user_id,log_date"});
+    if (error) {
+      await supabase.from("meal_logs").delete().eq("user_id",uid).eq("log_date",date);
+      await supabase.from("meal_logs").insert([{user_id:uid,log_date:date,meals:JSON.stringify(meals)}]);
+    }
   },
   async loadMeals(uid, date) { if (!supabase) return null; const { data } = await supabase.from("meal_logs").select("*").eq("user_id",uid).eq("log_date",date).single(); return data ? JSON.parse(data.meals) : null; },
   async saveFavMeals(uid, favs) {
@@ -144,10 +201,17 @@ const DB = {
   },
   async saveNutritionLog(uid, date, mealName, calories, protein, carbs, fat) {
     if (!supabase) return;
-    await supabase.from("nutrition_logs")
-      .delete().eq("user_id",uid).eq("log_date",date).eq("meal_name",mealName);
-    await supabase.from("nutrition_logs")
-      .insert([{user_id:uid,log_date:date,meal_name:mealName,calories:Math.round(calories),protein:Math.round(protein*10)/10,carbs:Math.round(carbs*10)/10,fat:Math.round(fat*10)/10}]);
+    // upsert: atomic, non perde dati se insert fallisce dopo delete
+    // RICHIEDE unique constraint su (user_id, log_date, meal_name) — vedi SQL in commento
+    // SQL: ALTER TABLE nutrition_logs ADD CONSTRAINT nutrition_logs_unique UNIQUE (user_id, log_date, meal_name);
+    const { error } = await supabase.from("nutrition_logs")
+      .upsert([{user_id:uid,log_date:date,meal_name:mealName,calories:Math.round(calories),protein:Math.round(protein*10)/10,carbs:Math.round(carbs*10)/10,fat:Math.round(fat*10)/10}],
+        {onConflict:"user_id,log_date,meal_name"});
+    if(error) {
+      // Fallback: delete + insert se upsert non supportato (constraint mancante)
+      await supabase.from("nutrition_logs").delete().eq("user_id",uid).eq("log_date",date).eq("meal_name",mealName);
+      await supabase.from("nutrition_logs").insert([{user_id:uid,log_date:date,meal_name:mealName,calories:Math.round(calories),protein:Math.round(protein*10)/10,carbs:Math.round(carbs*10)/10,fat:Math.round(fat*10)/10}]);
+    }
   },
   async deleteNutritionLog(uid, date, mealName) {
     if (!supabase) return;
@@ -204,8 +268,8 @@ const DB = {
 // ogni slot = indice pasto (0=colazione, 1=pranzo/pasto1, 2=cena/pasto2, 3=spuntino, 4=spuntino2)
 const PRESET_DIETS = [
   {
-    id:"bilanciata", name:"Bilanciata", type:"Bilanciata", emoji:"⚖️",
-    color:"#00D563", description:"Equilibrio perfetto tra tutti i macronutrienti. Adatta a chi vuole mantenere il peso o aumentare la massa muscolare.",
+    id:"bilanciata", name:"Bilanciata", type:"Bilanciata", typeEn:"Balanced", emoji:"⚖️",
+    color:"#00D563", description:"Equilibrio perfetto tra tutti i macronutrienti. Adatta a chi vuole mantenere il peso o aumentare la massa muscolare.", descriptionEn:"Perfect balance of all macronutrients. Suitable for maintaining weight or building muscle mass.",
     avgCal:2000, macroRatio:{p:30,c:45,f:25},
     patterns:[
       {0:["Avena","Yogurt greco 0%","Mirtilli"], 1:["Petto di pollo","Riso bianco cotto","Broccoli"], 2:["Salmone","Patate cotte","Spinaci"], 3:["Banana","Mandorle"]},
@@ -214,8 +278,8 @@ const PRESET_DIETS = [
     ],
   },
   {
-    id:"high_protein", name:"High Protein", type:"High Protein", emoji:"💪",
-    color:"#58A6FF", description:"Alta concentrazione proteica per massimizzare la sintesi muscolare. Ideale per chi si allena con i pesi.",
+    id:"high_protein", name:"High Protein", type:"High Protein", typeEn:"High Protein", emoji:"💪",
+    color:"#58A6FF", description:"Alta concentrazione proteica per massimizzare la sintesi muscolare. Ideale per chi si allena con i pesi.", descriptionEn:"High protein concentration to maximize muscle synthesis. Ideal for those who train with weights.",
     avgCal:2200, macroRatio:{p:40,c:35,f:25},
     patterns:[
       {0:["Albumi","Avena","Yogurt greco 0%"], 1:["Petto di pollo","Riso bianco cotto","Broccoli"], 2:["Tonno al naturale","Patate cotte","Spinaci"], 3:["Whey protein","Banana"]},
@@ -224,8 +288,8 @@ const PRESET_DIETS = [
     ],
   },
   {
-    id:"low_carb", name:"Low Carb", type:"Low Carb", emoji:"📉",
-    color:"#FFA657", description:"Riduzione dei carboidrati per favorire il dimagrimento mantenendo la massa muscolare.",
+    id:"low_carb", name:"Low Carb", type:"Low Carb", typeEn:"Low Carb", emoji:"📉",
+    color:"#FFA657", description:"Riduzione dei carboidrati per favorire il dimagrimento mantenendo la massa muscolare.", descriptionEn:"Carbohydrate reduction to promote fat loss while maintaining muscle mass.",
     avgCal:1800, macroRatio:{p:35,c:20,f:45},
     patterns:[
       {0:["Uova intere","Albumi","Avocado"], 1:["Petto di pollo","Zucchine","Spinaci"], 2:["Salmone","Broccoli","Cavolfiore"], 3:["Mandorle","Yogurt greco 0%"]},
@@ -234,8 +298,8 @@ const PRESET_DIETS = [
     ],
   },
   {
-    id:"keto", name:"Keto", type:"Chetogenica", emoji:"🥑",
-    color:"#D29922", description:"Dieta chetogenica: pochissimi carboidrati, grassi elevati. Il corpo brucia grassi come fonte primaria di energia.",
+    id:"keto", name:"Keto", type:"Chetogenica", typeEn:"Ketogenic", emoji:"🥑",
+    color:"#D29922", description:"Dieta chetogenica: pochissimi carboidrati, grassi elevati. Il corpo brucia grassi come fonte primaria di energia.", descriptionEn:"Ketogenic diet: very few carbs, high fat. The body burns fat as its primary energy source.",
     avgCal:1900, macroRatio:{p:25,c:5,f:70},
     patterns:[
       {0:["Uova intere","Avocado","Olio d'oliva"], 1:["Petto di pollo","Zucchine","Olio d'oliva"], 2:["Salmone","Spinaci","Mandorle"], 3:["Noci","Bresaola"]},
@@ -244,8 +308,8 @@ const PRESET_DIETS = [
     ],
   },
   {
-    id:"mediterranea", name:"Mediterranea", type:"Mediterranea", emoji:"🫒",
-    color:"#3FCCA0", description:"Ricca di pesce, legumi, olio extravergine e cereali integrali. Protegge il sistema cardiovascolare.",
+    id:"mediterranea", name:"Mediterranea", type:"Mediterranea", typeEn:"Mediterranean", emoji:"🫒",
+    color:"#3FCCA0", description:"Ricca di pesce, legumi, olio extravergine e cereali integrali. Protegge il sistema cardiovascolare.", descriptionEn:"Rich in fish, legumes, extra virgin olive oil and whole grains. Protects the cardiovascular system.",
     avgCal:2000, macroRatio:{p:25,c:50,f:25},
     patterns:[
       {0:["Pane integrale","Yogurt greco 0%","Mirtilli"], 1:["Tonno al naturale","Ceci cotti","Insalata mista"], 2:["Salmone","Riso integrale cotto","Pomodori"], 3:["Mela","Mandorle"]},
@@ -254,8 +318,8 @@ const PRESET_DIETS = [
     ],
   },
   {
-    id:"vegetariana", name:"Vegetariana", type:"Vegetariana", emoji:"🥗",
-    color:"#4CAF50", description:"Nessuna carne o pesce. Proteine da uova, latticini e legumi. Ricca di fibre e micronutrienti.",
+    id:"vegetariana", name:"Vegetariana", type:"Vegetariana", typeEn:"Vegetarian", emoji:"🥗",
+    color:"#4CAF50", description:"Nessuna carne o pesce. Proteine da uova, latticini e legumi. Ricca di fibre e micronutrienti.", descriptionEn:"No meat or fish. Protein from eggs, dairy and legumes. Rich in fiber and micronutrients.",
     avgCal:1900, macroRatio:{p:25,c:50,f:25},
     patterns:[
       {0:["Yogurt greco 0%","Avena","Fragole"], 1:["Uova intere","Quinoa cotta","Spinaci"], 2:["Tofu","Riso bianco cotto","Broccoli"], 3:["Mela","Noci"]},
@@ -264,8 +328,8 @@ const PRESET_DIETS = [
     ],
   },
   {
-    id:"vegana", name:"Vegana", type:"Vegana", emoji:"🌱",
-    color:"#8BC34A", description:"100% vegetale. Proteine da tofu, tempeh, legumi e cereali integrali. Rispetta l'ambiente e la salute.",
+    id:"vegana", name:"Vegana", type:"Vegana", typeEn:"Vegan", emoji:"🌱",
+    color:"#8BC34A", description:"100% vegetale. Proteine da tofu, tempeh, legumi e cereali integrali. Rispetta l'ambiente e la salute.", descriptionEn:"100% plant-based. Protein from tofu, tempeh, legumes and whole grains. Respects the environment and health.",
     avgCal:1900, macroRatio:{p:20,c:55,f:25},
     patterns:[
       {0:["Fiocchi d'avena","Mirtilli","Banana"], 1:["Tofu","Riso bianco cotto","Broccoli"], 2:["Tempeh","Lenticchie cotte","Spinaci"], 3:["Mandorle","Mela"]},
@@ -274,9 +338,10 @@ const PRESET_DIETS = [
     ],
   },
   {
-    id:"ss_nutrition", name:"SS Nutrition", type:"High Protein Cycling", emoji:"🏋️",
-    color:"#E040FB", 
+    id:"ss_nutrition", name:"SS Nutrition", type:"High Protein Cycling", typeEn:"High Protein Cycling", emoji:"🏋️",
+    color:"#E040FB",
     description:"Alternanza Giornata Standard (35/35/30) e Carico Glucidico (31/46/23). ~2460-2674 kcal. Proteina stabile ~215-230g. Pensato per composizione corporea su atleti 85-100kg.",
+    descriptionEn:"Alternating Standard Day (35/35/30) and Carb Load (31/46/23). ~2460-2674 kcal. Stable protein ~215-230g. Designed for body composition for 85-100kg athletes.",
     avgCal:2568, macroRatio:{p:33,c:41,f:26},
     patterns:[
       {
@@ -333,26 +398,32 @@ const PRESET_DIETS = [
 ];
 
 // FOOD DATABASE
+const CATEGORY_NAMES_EN = {
+  "Proteine":"Proteins","Carboidrati":"Carbohydrates","Verdure":"Vegetables","Grassi":"Fats","Latticini":"Dairy","Bevande":"Beverages",
+};
+function getCatName(cat,lang) { const l=lang||(localStorage.getItem("nc2-lang")||"it"); return l==="en" ? (CATEGORY_NAMES_EN[cat]||cat) : cat; }
+function getFoodName(food,lang) { const l=lang||(localStorage.getItem("nc2-lang")||"it"); return l==="en" ? (food.nameEn||food.name) : food.name; }
+
 const FOODS = {
   "Proteine": [
-    {name:"Petto di pollo",emoji:"🍗",cal:165,p:31,c:0,f:3.6},
-    {name:"Tacchino",emoji:"🦃",cal:189,p:29,c:0,f:7},
-    {name:"Manzo magro",emoji:"🥩",cal:143,p:22,c:0,f:6},
-    {name:"Salmone",emoji:"🐠",cal:208,p:20,c:0,f:13},
-    {name:"Tonno al naturale",emoji:"🐟",cal:116,p:26,c:0,f:1},
-    {name:"Merluzzo",emoji:"🐡",cal:82,p:18,c:0,f:0.7},
-    {name:"Sgombro",emoji:"🐟",cal:205,p:19,c:0,f:14},
-    {name:"Uova intere",emoji:"🥚",cal:155,p:13,c:1.1,f:11},
-    {name:"Albumi",emoji:"🥣",cal:52,p:11,c:0.7,f:0.2},
-    {name:"Yogurt greco 0%",emoji:"🫙",cal:59,p:10,c:3.6,f:0.4,maxQty:200},
-    {name:"Ricotta magra",emoji:"🧀",cal:138,p:11,c:4,f:8,maxQty:200},
-    {name:"Tofu",emoji:"🍱",cal:76,p:8,c:2,f:4},
-    {name:"Whey protein",emoji:"🥛",cal:380,p:75,c:7,f:5,maxQty:50},
-    {name:"Caseina",emoji:"🥛",cal:370,p:72,c:8,f:4,maxQty:50},
-    {name:"Gamberetti",emoji:"🦐",cal:85,p:18,c:0.9,f:0.9},
-    {name:"Bresaola",emoji:"🥩",cal:151,p:32,c:0.5,f:2},
-    {name:"Prosciutto cotto",emoji:"🥩",cal:149,p:19,c:1,f:7},
-    {name:"Tempeh",emoji:"🌱",cal:193,p:19,c:9,f:11},
+    {name:"Petto di pollo",nameEn:"Chicken breast",emoji:"🍗",cal:165,p:31,c:0,f:3.6},
+    {name:"Tacchino",nameEn:"Turkey",emoji:"🦃",cal:189,p:29,c:0,f:7},
+    {name:"Manzo magro",nameEn:"Lean beef",emoji:"🥩",cal:143,p:22,c:0,f:6},
+    {name:"Salmone",nameEn:"Salmon",emoji:"🐠",cal:208,p:20,c:0,f:13},
+    {name:"Tonno al naturale",nameEn:"Tuna in water",emoji:"🐟",cal:116,p:26,c:0,f:1},
+    {name:"Merluzzo",nameEn:"Cod",emoji:"🐡",cal:82,p:18,c:0,f:0.7},
+    {name:"Sgombro",nameEn:"Mackerel",emoji:"🐟",cal:205,p:19,c:0,f:14},
+    {name:"Uova intere",nameEn:"Whole eggs",emoji:"🥚",cal:155,p:13,c:1.1,f:11},
+    {name:"Albumi",nameEn:"Egg whites",emoji:"🥣",cal:52,p:11,c:0.7,f:0.2},
+    {name:"Yogurt greco 0%",nameEn:"Greek yogurt 0%",emoji:"🫙",cal:59,p:10,c:3.6,f:0.4,maxQty:200},
+    {name:"Ricotta magra",nameEn:"Low-fat ricotta",emoji:"🧀",cal:138,p:11,c:4,f:8,maxQty:200},
+    {name:"Tofu",nameEn:"Tofu",emoji:"🍱",cal:76,p:8,c:2,f:4},
+    {name:"Whey protein",nameEn:"Whey protein",emoji:"🥛",cal:380,p:75,c:7,f:5,maxQty:50},
+    {name:"Caseina",nameEn:"Casein",emoji:"🥛",cal:370,p:72,c:8,f:4,maxQty:50},
+    {name:"Gamberetti",nameEn:"Shrimp",emoji:"🦐",cal:85,p:18,c:0.9,f:0.9},
+    {name:"Bresaola",nameEn:"Bresaola",emoji:"🥩",cal:151,p:32,c:0.5,f:2},
+    {name:"Prosciutto cotto",nameEn:"Cooked ham",emoji:"🥩",cal:149,p:19,c:1,f:7},
+    {name:"Tempeh",nameEn:"Tempeh",emoji:"🌱",cal:193,p:19,c:9,f:11},
     {name:"Acciuga sott'olio, sgocciolata",emoji:"🫒",cal:182.0,p:26.4,c:0.2,f:8.5},
     {name:"Agnello, carré, crudo (Australia, Nuova Zelanda)",emoji:"🥚",cal:156.0,p:20.3,c:0.0,f:8.3},
     {name:"Agnello, lombata, cruda (Australia, Nuova Zelanda)",emoji:"🥚",cal:117.0,p:21.8,c:0.0,f:3.3},
@@ -413,12 +484,10 @@ const FOODS = {
     // Banca Dati Svizzera dei Valori Nutritivi
     {name:"Hamburger (manzo), fatto in casa, cotto in olio di colza HOLL",emoji:"🥩",cal:231.0,p:17.8,c:6.4,f:14.7},
     {name:"Agnello (media, senza interiora e cotoletta), crudo",emoji:"🍽️",cal:137.0,p:20.5,c:0.0,f:6.1},
-    {name:"Agnello, carré, crudo (Australia, Nuova Zelanda)",emoji:"🥚",cal:156.0,p:20.3,c:0.0,f:8.3},
     {name:"Agnello, cosciotto (Svizzera, Nuova Zelanda), crudo",emoji:"🥚",cal:155.0,p:20.2,c:0.0,f:8.2},
     {name:"Agnello, cosciotto, arrosto (senza aggiunta di grassi o sale)",emoji:"🍽️",cal:203.0,p:28.6,c:0.0,f:9.8},
     {name:"Agnello, filetto, cotto in padella, cottura media (senza aggiunta di grassi o sale)",emoji:"🍽️",cal:147.0,p:25.8,c:0.0,f:4.8},
     {name:"Agnello, filetto, crudo",emoji:"🍽️",cal:122.0,p:20.4,c:0.0,f:4.5},
-    {name:"Agnello, spezzatino, crudo (Svizzera)",emoji:"🍽️",cal:154.0,p:19.6,c:0.0,f:8.4},
     {name:"Burger (solo la carne, manzo), fatto in casa, grigliato (senza aggiunta di grassi)",emoji:"🥩",cal:208.0,p:18.3,c:6.5,f:12.0},
     {name:"Fegato (media di vitello, manzo, maiale), cotto in padella (senza aggiunta di grassi o sale)",emoji:"🥩",cal:155.0,p:23.5,c:4.4,f:4.9},
     {name:"Fegato (media di vitello, manzo, maiale), crudo",emoji:"🥩",cal:133.0,p:20.3,c:3.6,f:4.2},
@@ -448,11 +517,9 @@ const FOODS = {
     {name:"Salmone d'allevamento, crudo",emoji:"🐠",cal:223.0,p:19.9,c:0.0,f:15.9},
     {name:"Salmone d'allevamento, filetto, al vapore (senza aggiunta di grassi o sale)",emoji:"🐠",cal:200.0,p:18.7,c:0.0,f:13.9},
     {name:"Salmone selvatico, crudo",emoji:"🐠",cal:182.0,p:19.7,c:0.0,f:11.5},
-    {name:"Scaloppina di vitello, cotta in olio di colza HOLL",emoji:"🥩",cal:185.0,p:26.8,c:0.0,f:8.6},
     {name:"Spezzatino (media di manzo, vitello, maiale e pollame), cotto in padella (senza aggiunta di grassi o sale)",emoji:"🥩",cal:142.0,p:29.5,c:0.2,f:2.6},
     {name:"Spezzatino (media di manzo, vitello, maiale e pollame), crudo",emoji:"🥩",cal:111.0,p:22.5,c:0.2,f:2.3},
     {name:"Tonno, crudo",emoji:"🐟",cal:114.0,p:25.8,c:0.0,f:1.3},
-    {name:"Tonno, sott'olio, sgocciolato",emoji:"🐟",cal:199.0,p:27.3,c:0.9,f:9.6},
     {name:"Vitello, arrosto di spalla, cotto al forno (senza aggiunta di grassi e sale)",emoji:"🥩",cal:161.0,p:28.6,c:0.0,f:5.2},
     {name:"Vitello, bistecca,  cotto in padella (senza aggiunta di grassi o sale)",emoji:"🥩",cal:144.0,p:27.3,c:0.0,f:3.9},
     {name:"Vitello, fegato, crudo",emoji:"🥩",cal:127.0,p:19.6,c:4.6,f:3.4},
@@ -466,21 +533,17 @@ const FOODS = {
     {name:"Vitello, spalla, arrosto, crudo",emoji:"🥩",cal:122.0,p:20.2,c:0.0,f:4.6},
     {name:"Vitello, spezzatino, crudo",emoji:"🥩",cal:102.0,p:20.0,c:0.0,f:2.4},
     {name:"Bastoncino di pesce (impanato e prefritto), cotto in olio di colza HOLL",emoji:"🐡",cal:302.0,p:16.0,c:16.8,f:18.9},
-    {name:"Saltimbocca, cotto in olio di colza HOLL",emoji:"🫒",cal:216.0,p:28.8,c:0.1,f:11.2},
     {name:"Agnello, costoletta, cruda",emoji:"🍽️",cal:179.0,p:20.2,c:0.0,f:10.9},
-    {name:"Agnello, lombata, cruda (Australia, Nuova Zelanda)",emoji:"🥚",cal:117.0,p:21.8,c:0.0,f:3.3},
     {name:"Carne di manzo (media, senza interiora e costine), cruda",emoji:"🥩",cal:137.0,p:21.4,c:0.0,f:5.7},
     {name:"Carne di vitello (media, escluse interiora e la cotoletta), cruda",emoji:"🥩",cal:127.0,p:21.1,c:0.0,f:4.8},
     {name:"Carne tritata (media di manzo, vitello, maiale e pollo), cruda",emoji:"🍗",cal:183.0,p:20.1,c:0.0,f:11.4},
     {name:"Carne tritata (media di manzo,vitello, maiale e pollo), cotta in padella (senza aggiunta di grassi o sale)",emoji:"🍗",cal:205.0,p:24.4,c:0.0,f:12.0},
-    {name:"Cordon bleu di vitello, preparato",emoji:"🥩",cal:233.0,p:22.9,c:10.3,f:11.0},
     {name:"Costoletta (media di vitello, maiale e agnello), cotta in padella (senza aggiunta di grassi o sale)",emoji:"🥩",cal:223.0,p:28.8,c:0.0,f:12.0},
     {name:"Costoletta (media di vitello, maiale e agnello), cruda",emoji:"🥩",cal:177.0,p:21.3,c:0.0,f:10.2},
     {name:"Fettina (media di vitello, manzo, maiale, pollo), cotta in padella (senza aggiunta di grassi o sale)",emoji:"🍗",cal:141.0,p:29.7,c:0.2,f:2.4},
     {name:"Fettina (media di vitello, manzo, maiale, pollo), cruda",emoji:"🍗",cal:110.0,p:22.6,c:0.2,f:2.1},
     {name:"Fettina (media di vitello, manzo, maiale, pollo), impanata e preparata",emoji:"🍗",cal:229.0,p:23.9,c:10.2,f:10.2},
     {name:"Lingua (media di vitello e manzo), cruda",emoji:"🥩",cal:191.0,p:16.6,c:2.8,f:12.6},
-    {name:"Lioner di pollo",emoji:"🍗",cal:205.0,p:13.5,c:0.9,f:16.4},
     {name:"Manzo, bistecca, cruda",emoji:"🥩",cal:165.0,p:21.1,c:0.0,f:9.0},
     {name:"Manzo, carne macinata, cotta in padella (senza aggiunta di grassi o sale)",emoji:"🥩",cal:211.0,p:32.6,c:0.0,f:8.9},
     {name:"Manzo, carne macinata, cruda",emoji:"🥩",cal:208.0,p:19.2,c:0.0,f:14.6},
@@ -493,24 +556,24 @@ const FOODS = {
     {name:"Manzo, spalla, arrostita al forno, cottura media (senza aggiunta di grassi o sale)",emoji:"🥩",cal:146.0,p:28.5,c:0.0,f:3.6},
   ],
   "Carboidrati": [
-    {name:"Riso bianco cotto",emoji:"🍚",cal:130,p:2.7,c:28,f:0.3},
-    {name:"Riso integrale cotto",emoji:"🍚",cal:112,p:2.6,c:23,f:0.9},
-    {name:"Pasta cotta",emoji:"🍝",cal:158,p:5.8,c:31,f:0.9},
-    {name:"Pasta integrale cotta",emoji:"🍝",cal:150,p:5.5,c:28,f:1.1},
-    {name:"Avena",emoji:"🌾",cal:389,p:17,c:66,f:7},
-    {name:"Fiocchi d'avena",emoji:"🌾",cal:368,p:13,c:66,f:7},
-    {name:"Pane integrale",emoji:"🍞",cal:247,p:13,c:41,f:3.4},
-    {name:"Pane bianco",emoji:"🥖",cal:265,p:9,c:49,f:3.2},
-    {name:"Patate cotte",emoji:"🥔",cal:87,p:1.9,c:20,f:0.1},
-    {name:"Quinoa cotta",emoji:"🌿",cal:120,p:4.4,c:21,f:1.9},
-    {name:"Lenticchie cotte",emoji:"🫘",cal:116,p:9,c:20,f:0.4},
-    {name:"Ceci cotti",emoji:"🫘",cal:164,p:8.9,c:27,f:2.6},
-    {name:"Fagioli cotti",emoji:"🫘",cal:127,p:8.7,c:23,f:0.5},
-    {name:"Banana",emoji:"🍌",cal:89,p:1.1,c:23,f:0.3},
-    {name:"Mela",emoji:"🍎",cal:52,p:0.3,c:14,f:0.2},
-    {name:"Mirtilli",emoji:"🫐",cal:57,p:0.7,c:14,f:0.3},
-    {name:"Fragole",emoji:"🍓",cal:32,p:0.7,c:7.7,f:0.3},
-    {name:"Farro cotto",emoji:"🌾",cal:140,p:5,c:27,f:1},
+    {name:"Riso bianco cotto",nameEn:"White rice cooked",emoji:"🍚",cal:130,p:2.7,c:28,f:0.3},
+    {name:"Riso integrale cotto",nameEn:"Brown rice cooked",emoji:"🍚",cal:112,p:2.6,c:23,f:0.9},
+    {name:"Pasta cotta",nameEn:"Pasta cooked",emoji:"🍝",cal:158,p:5.8,c:31,f:0.9},
+    {name:"Pasta integrale cotta",nameEn:"Whole wheat pasta cooked",emoji:"🍝",cal:150,p:5.5,c:28,f:1.1},
+    {name:"Avena",nameEn:"Oats",emoji:"🌾",cal:389,p:17,c:66,f:7},
+    {name:"Fiocchi d'avena",nameEn:"Rolled oats",emoji:"🌾",cal:368,p:13,c:66,f:7},
+    {name:"Pane integrale",nameEn:"Whole wheat bread",emoji:"🍞",cal:247,p:13,c:41,f:3.4},
+    {name:"Pane bianco",nameEn:"White bread",emoji:"🥖",cal:265,p:9,c:49,f:3.2},
+    {name:"Patate cotte",nameEn:"Potatoes cooked",emoji:"🥔",cal:87,p:1.9,c:20,f:0.1},
+    {name:"Quinoa cotta",nameEn:"Quinoa cooked",emoji:"🌿",cal:120,p:4.4,c:21,f:1.9},
+    {name:"Lenticchie cotte",nameEn:"Lentils cooked",emoji:"🫘",cal:116,p:9,c:20,f:0.4},
+    {name:"Ceci cotti",nameEn:"Chickpeas cooked",emoji:"🫘",cal:164,p:8.9,c:27,f:2.6},
+    {name:"Fagioli cotti",nameEn:"Beans cooked",emoji:"🫘",cal:127,p:8.7,c:23,f:0.5},
+    {name:"Banana",nameEn:"Banana",emoji:"🍌",cal:89,p:1.1,c:23,f:0.3},
+    {name:"Mela",nameEn:"Apple",emoji:"🍎",cal:52,p:0.3,c:14,f:0.2},
+    {name:"Mirtilli",nameEn:"Blueberries",emoji:"🫐",cal:57,p:0.7,c:14,f:0.3},
+    {name:"Fragole",nameEn:"Strawberries",emoji:"🍓",cal:32,p:0.7,c:7.7,f:0.3},
+    {name:"Farro cotto",nameEn:"Spelt cooked",emoji:"🌾",cal:140,p:5,c:27,f:1},
     {name:"Albicocca, sciroppata, in scatola, sgocciolata",emoji:"🍑",cal:62.0,p:0.9,c:13.7,f:0.1},
     {name:"Albicocche, secche",emoji:"📦",cal:239.0,p:2.9,c:59.1,f:0.5},
     {name:"Ananas, con edulcorante, in scatola, sgocciolata",emoji:"📦",cal:42.0,p:0.5,c:9.4,f:0.1},
@@ -599,43 +662,21 @@ const FOODS = {
     // Banca Dati Svizzera dei Valori Nutritivi
     {name:"Pasta fresca, con ripieno di spinaci e ricotta, cotta (senza aggiunta di grasso e sale)",emoji:"🧀",cal:177.0,p:7.5,c:24.5,f:4.9},
     {name:"Pasta fresca, con ripieno di spinaci e ricotta, cruda",emoji:"🧀",cal:212.0,p:8.7,c:30.0,f:5.7},
-    {name:"Pane alle noci",emoji:"🍞",cal:331.0,p:9.2,c:30.2,f:17.9},
-    {name:"Pane per toast all'olio vegetale",emoji:"🍞",cal:267.0,p:8.7,c:49.2,f:3.3},
     {name:"Patata dolce, al vapore (senza aggiunta di sale)",emoji:"🥔",cal:81.0,p:1.6,c:17.1,f:0.1},
     {name:"Riso integrale, bollito in acqua salata (sale non iodato)",emoji:"🍚",cal:126.0,p:2.7,c:25.7,f:1.0},
     {name:"Riso raffinato, bollito in acqua salata (sale non iodato)",emoji:"🍚",cal:116.0,p:2.3,c:25.8,f:0.3},
     {name:"Riso tipo parboiled, bollito in acqua salata (sale non iodato)",emoji:"🍚",cal:120.0,p:2.4,c:26.7,f:0.3},
-    {name:"Risotto senza formaggio, cotto",emoji:"🧀",cal:124.0,p:2.3,c:24.8,f:1.6},
-    {name:"Bastoncini di pasta sfoglia",emoji:"🍝",cal:490.0,p:7.1,c:40.4,f:32.9},
     {name:"Ceci, cotti (senza aggiunta di grassi e sale)",emoji:"🫘",cal:127.0,p:7.3,c:16.8,f:2.0},
-    {name:"Ceci, secchi",emoji:"🫘",cal:327.0,p:18.6,c:44.3,f:4.9},
-    {name:"Fagioli di soia, secchi",emoji:"🫘",cal:396.0,p:38.2,c:8.7,f:18.3},
-    {name:"Galletta di riso integrale",emoji:"🍚",cal:390.0,p:7.7,c:81.5,f:2.8},
-    {name:"Galletta di riso integrale, con copertura dolce",emoji:"🍚",cal:500.0,p:6.1,c:63.6,f:23.9},
     {name:"Galletta di riso integrale, con miele o frutta",emoji:"🍚",cal:379.0,p:6.6,c:81.0,f:2.4},
     {name:"Lenticchie, decorticate, cotte (senza aggiunta di grassi e sale)",emoji:"🫘",cal:134.0,p:11.0,c:19.0,f:0.6},
     {name:"Lenticchie, intere, cotte (senza aggiunta di grassi e sale)",emoji:"🫘",cal:115.0,p:8.8,c:15.6,f:0.5},
-    {name:"Lenticchie, intere, secche",emoji:"🫘",cal:324.0,p:24.4,c:44.8,f:1.5},
-    {name:"Pane (media)",emoji:"🍞",cal:264.0,p:9.2,c:44.6,f:4.6},
-    {name:"Pane bigio",emoji:"🍞",cal:234.0,p:9.5,c:44.3,f:1.2},
     {name:"Pane bigio (con sale iodato)",emoji:"🍞",cal:234.0,p:9.5,c:44.3,f:1.2},
-    {name:"Pane contadino",emoji:"🍞",cal:242.0,p:9.2,c:44.3,f:2.0},
-    {name:"Pane croccante (Knäckebrot), integrale",emoji:"🍞",cal:325.0,p:12.0,c:57.9,f:1.7},
     {name:"Pane croccante (Knäckebrot), integrale, con semi di lino",emoji:"🍞",cal:345.0,p:12.9,c:52.4,f:5.8},
     {name:"Pane croccante (Knäckebrot), integrale, con semi di sesamo",emoji:"🍞",cal:354.0,p:13.1,c:52.4,f:6.9},
     {name:"Pane di segale (con lievito)",emoji:"🍞",cal:210.0,p:6.5,c:39.0,f:0.9},
-    {name:"Pane di segale vallesano",emoji:"🍞",cal:218.0,p:7.6,c:38.8,f:1.0},
-    {name:"Pane di tritello di segale",emoji:"🍞",cal:225.0,p:7.7,c:40.0,f:1.1},
-    {name:"Pane integrale di grano",emoji:"🍞",cal:213.0,p:8.6,c:38.3,f:1.3},
-    {name:"Pane per toast al burro",emoji:"🍞",cal:316.0,p:8.9,c:45.7,f:10.4},
-    {name:"Pane per toast integrale",emoji:"🍞",cal:271.0,p:9.3,c:43.7,f:4.9},
-    {name:"Pane per toast, scuro o multicereali",emoji:"🍞",cal:272.0,p:9.1,c:45.6,f:4.7},
-    {name:"Pane semi-bianco",emoji:"🍞",cal:240.0,p:9.4,c:46.4,f:1.1},
     {name:"Pane semi-bianco (con sale iodato)",emoji:"🍞",cal:240.0,p:9.4,c:46.4,f:1.1},
-    {name:"Pane ticinese",emoji:"🍞",cal:323.0,p:10.3,c:57.1,f:5.2},
     {name:"Pasta all'uovo, cotta in acqua salata (sale non iodato)",emoji:"🥚",cal:132.0,p:5.0,c:25.0,f:1.1},
     {name:"Pasta all'uovo, secca",emoji:"🥚",cal:365.0,p:13.3,c:69.9,f:2.8},
-    {name:"Pasta fresca, con ripieno di carne, cotta",emoji:"🍝",cal:174.0,p:6.9,c:25.1,f:4.7},
     {name:"Pasta frolla (con burro), dolce, cotta al forno",emoji:"🍝",cal:530.0,p:9.8,c:57.3,f:28.6},
     {name:"Pasta frolla (con burro), dolce, cruda",emoji:"🍝",cal:424.0,p:7.8,c:45.8,f:22.9},
     {name:"Pasta frolla (con grasso vegetale ), dolce, cotta al forno",emoji:"🍝",cal:494.0,p:8.0,c:58.4,f:24.9},
@@ -655,7 +696,6 @@ const FOODS = {
     {name:"Pasta sfoglia di quark (con grasso vegetale), cruda",emoji:"🍝",cal:388.0,p:7.1,c:28.8,f:26.9},
     {name:"Pasta sfoglia, fatta in casa (al burro), cruda",emoji:"🍝",cal:364.0,p:5.2,c:29.4,f:24.7},
     {name:"Pasta sfoglia, fatta in casa (con grasso vegetale), cruda",emoji:"🍝",cal:349.0,p:5.2,c:29.3,f:23.2},
-    {name:"Pasta, cotta in acqua salata (sale non iodato)",emoji:"🍝",cal:158.0,p:5.9,c:31.2,f:0.6},
     {name:"Pasta, secca",emoji:"🍝",cal:353.0,p:12.6,c:70.5,f:1.2},
     {name:"Patata dolce, cotta al forno (senza aggiunta di grassi o sale)",emoji:"🥔",cal:100.0,p:1.9,c:21.1,f:0.1},
     {name:"Patata dolce, cruda",emoji:"🥔",cal:81.0,p:1.6,c:17.1,f:0.1},
@@ -663,9 +703,7 @@ const FOODS = {
     {name:"Patata, con buccia, cotta al forno (senza aggiunta di grassi o sale)",emoji:"🥔",cal:100.0,p:2.5,c:20.7,f:0.2},
     {name:"Riso integrale, secco",emoji:"🍚",cal:350.0,p:7.4,c:71.4,f:2.8},
     {name:"Riso raffinato, secco",emoji:"🍚",cal:352.0,p:7.4,c:78.0,f:0.9},
-    {name:"Riso soffiato, croccante",emoji:"🍚",cal:385.0,p:6.3,c:86.0,f:1.5},
     {name:"Riso tipo parboiled, secco",emoji:"🍚",cal:356.0,p:7.5,c:78.6,f:1.0},
-    {name:"Risotto con formaggio, fatto in casa",emoji:"🧀",cal:143.0,p:4.2,c:23.1,f:3.7},
     {name:"Succo di carota",emoji:"🥕",cal:30.0,p:0.6,c:6.2,f:0.1},
     {name:"Succo di pomodoro",emoji:"🍅",cal:15.0,p:0.7,c:2.7,f:0.1},
     {name:"Amaranto, seme, cotto (senza aggiunta di grassi e sale)",emoji:"🍽️",cal:119.0,p:5.0,c:18.1,f:2.1},
@@ -679,18 +717,18 @@ const FOODS = {
     {name:"Fiocchi di patate, in polvere con latte e sale (purea istantanea)",emoji:"🥛",cal:365.0,p:11.3,c:65.5,f:5.3},
   ],
   "Verdure": [
-    {name:"Broccoli",emoji:"🥦",cal:34,p:2.8,c:7,f:0.4},
-    {name:"Spinaci",emoji:"🥬",cal:23,p:2.9,c:3.6,f:0.4},
-    {name:"Zucchine",emoji:"🥒",cal:17,p:1.2,c:3.1,f:0.3},
-    {name:"Pomodori",emoji:"🍅",cal:18,p:0.9,c:3.9,f:0.2},
-    {name:"Insalata mista",emoji:"🥗",cal:15,p:1.3,c:2.9,f:0.2},
-    {name:"Peperoni",emoji:"🫑",cal:31,p:1,c:6,f:0.3},
-    {name:"Carote",emoji:"🥕",cal:41,p:0.9,c:10,f:0.2},
-    {name:"Asparagi",emoji:"🌿",cal:20,p:2.2,c:3.9,f:0.1},
-    {name:"Funghi",emoji:"🍄",cal:22,p:3.1,c:3.3,f:0.3},
-    {name:"Cavolfiore",emoji:"🥦",cal:25,p:1.9,c:5,f:0.3},
-    {name:"Melanzane",emoji:"🍆",cal:25,p:1,c:6,f:0.2},
-    {name:"Cetrioli",emoji:"🥒",cal:16,p:0.7,c:3.6,f:0.1},
+    {name:"Broccoli",nameEn:"Broccoli",emoji:"🥦",cal:34,p:2.8,c:7,f:0.4},
+    {name:"Spinaci",nameEn:"Spinach",emoji:"🥬",cal:23,p:2.9,c:3.6,f:0.4},
+    {name:"Zucchine",nameEn:"Zucchini",emoji:"🥒",cal:17,p:1.2,c:3.1,f:0.3},
+    {name:"Pomodori",nameEn:"Tomatoes",emoji:"🍅",cal:18,p:0.9,c:3.9,f:0.2},
+    {name:"Insalata mista",nameEn:"Mixed salad",emoji:"🥗",cal:15,p:1.3,c:2.9,f:0.2},
+    {name:"Peperoni",nameEn:"Bell peppers",emoji:"🫑",cal:31,p:1,c:6,f:0.3},
+    {name:"Carote",nameEn:"Carrots",emoji:"🥕",cal:41,p:0.9,c:10,f:0.2},
+    {name:"Asparagi",nameEn:"Asparagus",emoji:"🌿",cal:20,p:2.2,c:3.9,f:0.1},
+    {name:"Funghi",nameEn:"Mushrooms",emoji:"🍄",cal:22,p:3.1,c:3.3,f:0.3},
+    {name:"Cavolfiore",nameEn:"Cauliflower",emoji:"🥦",cal:25,p:1.9,c:5,f:0.3},
+    {name:"Melanzane",nameEn:"Eggplant",emoji:"🍆",cal:25,p:1,c:6,f:0.2},
+    {name:"Cetrioli",nameEn:"Cucumbers",emoji:"🥒",cal:16,p:0.7,c:3.6,f:0.1},
     {name:"Basilico, fresco",emoji:"📦",cal:46.0,p:3.1,c:5.1,f:0.8},
     {name:"Broccoli, crudi",emoji:"🥦",cal:39.0,p:3.6,c:3.2,f:0.6},
     {name:"Carciofo, cuore, in scatola, sgocciolato",emoji:"📦",cal:27.0,p:1.8,c:2.3,f:0.5},
@@ -787,14 +825,14 @@ const FOODS = {
     {name:"Sedano rapa, al vapore (senza aggiunta di sale)",emoji:"🥗",cal:32.0,p:1.4,c:4.0,f:0.3},
   ],
   "Grassi": [
-    {name:"Olio d'oliva",emoji:"🫒",cal:884,p:0,c:0,f:100,maxQty:30},
-    {name:"Avocado",emoji:"🥑",cal:160,p:2,c:9,f:15,maxQty:150},
-    {name:"Mandorle",emoji:"🌰",cal:579,p:21,c:22,f:50,maxQty:50},
-    {name:"Noci",emoji:"🥜",cal:654,p:15,c:14,f:65,maxQty:40},
-    {name:"Burro di arachidi",emoji:"🥜",cal:588,p:25,c:20,f:50,maxQty:40},
-    {name:"Semi di chia",emoji:"🌱",cal:486,p:17,c:42,f:31,maxQty:30},
-    {name:"Semi di lino",emoji:"🌱",cal:534,p:18,c:29,f:42,maxQty:20},
-    {name:"Nocciole",emoji:"🌰",cal:628,p:15,c:17,f:61,maxQty:40},
+    {name:"Olio d'oliva",nameEn:"Olive oil",emoji:"🫒",cal:884,p:0,c:0,f:100,maxQty:30},
+    {name:"Avocado",nameEn:"Avocado",emoji:"🥑",cal:160,p:2,c:9,f:15,maxQty:150},
+    {name:"Mandorle",nameEn:"Almonds",emoji:"🌰",cal:579,p:21,c:22,f:50,maxQty:50},
+    {name:"Noci",nameEn:"Walnuts",emoji:"🥜",cal:654,p:15,c:14,f:65,maxQty:40},
+    {name:"Burro di arachidi",nameEn:"Peanut butter",emoji:"🥜",cal:588,p:25,c:20,f:50,maxQty:40},
+    {name:"Semi di chia",nameEn:"Chia seeds",emoji:"🌱",cal:486,p:17,c:42,f:31,maxQty:30},
+    {name:"Semi di lino",nameEn:"Flax seeds",emoji:"🌱",cal:534,p:18,c:29,f:42,maxQty:20},
+    {name:"Nocciole",nameEn:"Hazelnuts",emoji:"🌰",cal:628,p:15,c:17,f:61,maxQty:40},
     {name:"Anacardi",emoji:"📦",cal:619.0,p:21.5,c:23.2,f:48.1},
     {name:"Arachide",emoji:"🥜",cal:623.0,p:26.1,c:14.8,f:49.1},
     {name:"Burro da cucina",emoji:"📦",cal:745.0,p:0.5,c:0.7,f:82.2},
@@ -890,12 +928,12 @@ const FOODS = {
     {name:"Burro semigrasso",emoji:"🥜",cal:391.0,p:4.8,c:3.5,f:39.8},
   ],
   "Latticini": [
-    {name:"Latte intero",emoji:"🥛",cal:61,p:3.2,c:4.8,f:3.3,unit:"ml",maxQty:300},
-    {name:"Latte scremato",emoji:"🥛",cal:35,p:3.4,c:4.9,f:0.1,unit:"ml",maxQty:300},
-    {name:"Yogurt bianco intero",emoji:"🫙",cal:61,p:3.5,c:4.7,f:3.3,maxQty:200},
-    {name:"Mozzarella",emoji:"🧀",cal:253,p:17,c:2.7,f:20,maxQty:150},
-    {name:"Parmigiano",emoji:"🧀",cal:392,p:36,c:0,f:26,maxQty:50},
-    {name:"Fiocchi di latte",emoji:"🥛",cal:98,p:11,c:3.4,f:4.5,maxQty:200},
+    {name:"Latte intero",nameEn:"Whole milk",emoji:"🥛",cal:61,p:3.2,c:4.8,f:3.3,unit:"ml",maxQty:300},
+    {name:"Latte scremato",nameEn:"Skim milk",emoji:"🥛",cal:35,p:3.4,c:4.9,f:0.1,unit:"ml",maxQty:300},
+    {name:"Yogurt bianco intero",nameEn:"Plain whole yogurt",emoji:"🫙",cal:61,p:3.5,c:4.7,f:3.3,maxQty:200},
+    {name:"Mozzarella",nameEn:"Mozzarella",emoji:"🧀",cal:253,p:17,c:2.7,f:20,maxQty:150},
+    {name:"Parmigiano",nameEn:"Parmesan",emoji:"🧀",cal:392,p:36,c:0,f:26,maxQty:50},
+    {name:"Fiocchi di latte",nameEn:"Cottage cheese",emoji:"🥛",cal:98,p:11,c:3.4,f:4.5,maxQty:200},
     {name:"Formaggio Brie, alla panna",emoji:"🧀",cal:342.0,p:17.7,c:0.0,f:30.0},
     {name:"Formaggio Brie, grasso",emoji:"🧀",cal:298.0,p:21.4,c:0.0,f:23.5},
     {name:"Formaggio Camembert, alla panna",emoji:"🧀",cal:355.0,p:17.1,c:0.0,f:31.7},
@@ -1015,7 +1053,8 @@ async function syncFoodsFromSupabase() {
   try {
     // Controlla cache
     const cached = LS.g(FOODS_CACHE_KEY);
-    if (cached && cached.ts && (Date.now() - cached.ts) < FOODS_CACHE_TTL && cached.foods?.length > 100) {
+    const cacheValid = cached && cached.ts && (Date.now() - cached.ts) < FOODS_CACHE_TTL && cached.foods?.length > 100 && cached.foods.some(f => f.nameEn);
+    if (cacheValid) {
       ALL_FOODS = cached.foods;
       return cached.foods;
     }
@@ -1035,17 +1074,21 @@ async function syncFoodsFromSupabase() {
     }
     if (allRows.length > 0) {
       // Normalizza i campi dal DB al formato interno della app
-      const normalized = allRows.map(r => ({
-        name: r.name,
-        emoji: r.emoji || '🍽️',
-        cal: parseFloat(r.cal) || 0,
-        p: parseFloat(r.p) || 0,
-        c: parseFloat(r.c) || 0,
-        f: parseFloat(r.f) || 0,
-        unit: r.unit || undefined,
-        maxQty: r.max_qty || undefined,
-        barcode: r.barcode || undefined,
-      }));
+      const normalized = allRows.map(r => {
+        const bundle = BUNDLE_FOODS.find(f => f.name === r.name);
+        return {
+          name: r.name,
+          emoji: r.emoji || '🍽️',
+          cal: parseFloat(r.cal) || 0,
+          p: parseFloat(r.p) || 0,
+          c: parseFloat(r.c) || 0,
+          f: parseFloat(r.f) || 0,
+          unit: r.unit || undefined,
+          maxQty: r.max_qty || undefined,
+          barcode: r.barcode || undefined,
+          nameEn: bundle?.nameEn || undefined,
+        };
+      });
       ALL_FOODS = normalized;
       LS.s(FOODS_CACHE_KEY, { ts: Date.now(), foods: normalized });
       return normalized;
@@ -1107,7 +1150,7 @@ function parseOFF(p) {
 }
 async function lookupBarcode(code) {
   try {
-    const res = await fetch(`/api/search-foods?type=barcode&code=${encodeURIComponent(code)}`);
+    const res = await fetch(`${API_BASE}/api/search-foods?type=barcode&code=${encodeURIComponent(code)}`);
     const d = await res.json();
     return d.status === 1 ? parseOFF(d.product) : null;
   } catch { return null; }
@@ -1115,7 +1158,7 @@ async function lookupBarcode(code) {
 async function searchOFFText(q) {
   try {
     const lang = localStorage.getItem("nc2-lang") || "it";
-    const res = await fetch(`/api/search-foods?type=text&q=${encodeURIComponent(q)}&lang=${lang}`);
+    const res = await fetch(`${API_BASE}/api/search-foods?type=text&q=${encodeURIComponent(q)}&lang=${lang}`);
     if (!res.ok) return [];
     const d = await res.json();
     const products = d.products || [];
@@ -1389,76 +1432,137 @@ function totals(items) {
 
 // MEAL CONFIGS
 
-// ─── SELEZIONE STRUTTURATA DALLA CREDENZA ───────────────────────────────────
-// Regola: 1 proteina + 1 carboidrato + 1 verdura + 1 frutto (se utile)
-// Per colazione: liste specifiche di alimenti ammessi
-const FOOD_RULES = {
-  breakfast: {
-    protein: ["uov","yogurt greco","whey","albume","fiocchi di latte","cottage"],
-    carb:    ["pane","gallette","galletta","cereali","avena","mela","banana","arancia","pera","fragol","kiwi","ananas","uva","melone","anguria","albicocca","mango","frutto","frutta"],
-    veg:     ["pomodor","cetriolo","cetrioli","fagioli","carota","carote","bietola","bietole"],
-    fruit:   ["mela","banana","arancia","pera","fragol","kiwi","ananas","uva","melone","anguria","albicocca","mango"],
-  },
-  general: {
-    protein: ["pollo","tacchino","manzo","salmone","tonno","merluzzo","sgombro","uov","albume","yogurt","ricotta","tofu","whey","caseina","gamberetti","bresaola","prosciutto","tempeh","seitan","fiocchi di latte","cottage","maiale","vitello","agnello","spigola","orata","trota"],
-    carb:    ["pasta","riso","pane","patata","avena","gallette","galletta","cereali","farro","orzo","quinoa","lenticchie","ceci","mais","polenta","mela","banana","arancia","pera","fragol","kiwi","ananas","uva","melone","anguria","albicocca","mango","frutto","frutta"],
-    veg:     ["spinaci","broccoli","zucchini","zucchina","pomodor","insalata","lattuga","cavolo","peperone","melanzana","cetriolo","cetrioli","cavolfiore","carciofo","fagiol","carota","carote","bietola","bietole","sedano","finocchio","asparagi","verdur","rucola","radicchio"],
-    fruit:   ["mela","banana","arancia","pera","fragol","kiwi","ananas","uva","melone","anguria","albicocca","mango"],
-  },
+// ─── SISTEMA SLOT CULINARI ────────────────────────────────────────────────────
+// Ogni alimento appartiene a un "slot culinario" che definisce il suo ruolo nel pasto.
+// Questo garantisce combinazioni appetibili: mai whey + passata, mai olio da solo come proteina.
+
+// Mappa keyword → slot culinario
+const CULINARY_SLOTS = {
+  // Proteine animali carne
+  protein_meat:   ["pollo","tacchino","manzo","vitello","agnello","maiale","bresaola","prosciutto","speck","mortadella","salame","salsiccia","hamburger","bistecca","filetto","scaloppina","fettina","spezzatino","roastbeef","affettato"],
+  // Proteine pesce
+  protein_fish:   ["salmone","tonno","merluzzo","sgombro","trota","spigola","orata","gamberetti","gamberi","calamari","polpo","cozze","vongole","acciughe","sardine","halibut","branzino"],
+  // Uova
+  protein_egg:    ["uov","album"],
+  // Latticini proteici
+  protein_dairy:  ["yogurt greco","ricotta","fiocchi di latte","cottage","quark","skyr"],
+  // Legumi (proteina + carbo)
+  protein_legume: ["lenticch","ceci","fagioli","soia","edamame","tempeh","tofu"],
+  // Integratori (solo colazione)
+  protein_supp:   ["whey","caseina","proteine in polvere"],
+  // Carboidrati pasta/riso/cereali
+  carb_grain:     ["pasta","riso","farro","orzo","quinoa","bulgur","couscous","polenta","grano"],
+  // Pane e sostituti
+  carb_bread:     ["pane","gallette","galletta","crackers","friselle","grissini"],
+  // Tuberi
+  carb_potato:    ["patata","patate"],
+  // Avena/cereali per colazione
+  carb_oat:       ["avena","fiocchi d'avena","fiocchi di avena","muesli","granola","cereali"],
+  // Frutta
+  carb_fruit:     ["mela","banana","arancia","pera","fragol","kiwi","ananas","uva","melone","anguria","albicocca","mango","pesca","cilieghe","lamponi","mirtill","fico","dattero"],
+  // Verdure (ruolo accessorio, non mai protagonista)
+  veg:            ["spinaci","broccoli","zucchini","zucchina","pomodor","insalata","lattuga","cavolo","peperone","melanzana","cetriolo","cavolfiore","carciofo","carota","bietola","sedano","finocchio","asparagi","rucola","radicchio","fagiolini","piselli","verza","coste","cicoria"],
+  // Grassi/condimenti (mai come protagonista del pasto)
+  fat:            ["olio","mandorle","noci","nocciole","pistacchi","semi di","avocado","burro di arachidi","tahini"],
+  // Latticini liquidi
+  dairy_drink:    ["latte"],
 };
 
-function selectStructuredPantryFoods(mealName, pantryFoods, target) {
+// Assegna lo slot culinario a un alimento
+function getFoodSlot(food) {
+  const n = (food.name||"").toLowerCase();
+  for(const [slot, kws] of Object.entries(CULINARY_SLOTS)) {
+    if(kws.some(kw=>n.includes(kw))) return slot;
+  }
+  // Fallback: classifica per macro dominante
+  const k=food.cal||1;
+  if(food.p*4/k>0.30) return "protein_meat";
+  if(food.c*4/k>0.40) return "carb_grain";
+  if(food.f*9/k>0.40) return "fat";
+  return "veg";
+}
+
+// Gruppi di slot compatibili: se cerco "protein_fish" accetto anche "protein_meat" come fallback
+const SLOT_FALLBACKS = {
+  protein_meat:   ["protein_meat","protein_fish","protein_egg","protein_dairy","protein_legume"],
+  protein_fish:   ["protein_fish","protein_meat","protein_egg","protein_dairy","protein_legume"],
+  protein_egg:    ["protein_egg","protein_dairy","protein_meat","protein_fish"],
+  protein_dairy:  ["protein_dairy","protein_egg","protein_legume","protein_meat"],
+  protein_legume: ["protein_legume","protein_meat","protein_fish","protein_dairy"],
+  protein_supp:   ["protein_supp","protein_egg","protein_dairy"],
+  carb_grain:     ["carb_grain","carb_potato","carb_bread","carb_oat"],
+  carb_bread:     ["carb_bread","carb_grain","carb_oat","carb_potato"],
+  carb_potato:    ["carb_potato","carb_grain","carb_bread"],
+  carb_oat:       ["carb_oat","carb_bread","carb_grain","carb_fruit"],
+  carb_fruit:     ["carb_fruit","carb_oat","carb_bread"],
+  veg:            ["veg","carb_fruit"],
+  fat:            ["fat"],
+  dairy_drink:    ["dairy_drink","protein_dairy"],
+};
+
+// Trova il miglior sostituto dalla credenza per uno slot culinario
+function findBestForSlot(slot, pantryFoods, seen, rotationIdx=0) {
+  const fallbacks = SLOT_FALLBACKS[slot] || [slot];
+  for(const s of fallbacks) {
+    const candidates = pantryFoods
+      .filter(f=>!seen.has(f.name) && getFoodSlot(f)===s);
+    if(!candidates.length) continue;
+    // Ordina per qualità proteica (p/cal), ruota con rotationIdx
+    candidates.sort((a,b)=>(b.p/(b.cal||1))-(a.p/(a.cal||1)));
+    return candidates[rotationIdx % candidates.length];
+  }
+  return null;
+}
+
+// ─── SELEZIONE DALLA CREDENZA BASATA SU RICETTA (Opzione A) ─────────────────
+// Scegli una ricetta da WEEK_RECIPES, poi sostituisci ogni ingrediente
+// con il miglior equivalente disponibile in credenza.
+// Garantisce combinazioni culinariamente sensate E macro bilanciati.
+function selectPantryFoodsForRecipe(mealName, pantryFoods, recipes, rotationIdx=0, ratings={}) {
   if(!pantryFoods||!pantryFoods.length) return [];
-  const n=(mealName||"").toLowerCase();
-  const isBreakfast=n.includes("colazione")||n.includes("breakfast");
-  const rules=isBreakfast?FOOD_RULES.breakfast:FOOD_RULES.general;
 
-  const matches=(food,keywords)=>keywords.some(kw=>food.name.toLowerCase().includes(kw));
+  // 1. Scegli la ricetta migliore (preferisci quelle con alimenti votati bene)
+  const highRatedFoods = new Set(
+    Object.values(ratings).flat()
+      .filter(r=>r.rating>=4)
+      .flatMap(r=>r.foods||[])
+  );
+  const scored = recipes.map((r,i)=>({
+    r, i,
+    score: r.foods.filter(f=>highRatedFoods.has(f)).length,
+  }));
+  scored.sort((a,b)=>b.score-a.score);
+  const topScore = scored[0].score;
+  const topGroup = scored.filter(s=>s.score===topScore);
+  const recipe = topGroup[rotationIdx % topGroup.length].r;
 
-  // Classifica ogni alimento
-  const proteins=pantryFoods.filter(f=>matches(f,rules.protein));
-  const carbs=pantryFoods.filter(f=>!matches(f,rules.protein)&&matches(f,rules.carb));
-  // Le verdure non vengono escluse se matchano anche i carbi: la keyword veg ha priorità
-  const vegs=pantryFoods.filter(f=>!matches(f,rules.protein)&&matches(f,rules.veg));
-  const fruits=pantryFoods.filter(f=>!matches(f,rules.protein)&&matches(f,rules.fruit));
+  // 2. Per ogni ingrediente della ricetta, trova il miglior sostituto in credenza
+  const seen = new Set();
+  const selected = [];
 
-  // Punteggio macro per scegliere il migliore per categoria
-  const totalCal=target.calories||1;
-  const pPct=(target.protein*4)/totalCal;
-  const cPct=(target.carbs*4)/totalCal;
-  const score=(f,weight)=>{const k=f.cal||1;const pp=(f.p*4)/k;return pp*weight+(f.cal/k)*0.5;};
+  for(const foodName of recipe.foods) {
+    // Determina lo slot dell'ingrediente originale (es. "Petto di pollo" → protein_meat)
+    const templateFood = { name: foodName, cal:0, p:0, c:0, f:0 };
+    const slot = getFoodSlot(templateFood);
 
-  const best=(arr,weight=1)=>{
-    if(!arr.length) return null;
-    return arr.slice().sort((a,b)=>score(b,weight)-score(a,weight))[0];
-  };
-
-  const selected=[];
-  const seen=new Set();
-  const add=(food)=>{if(food&&!seen.has(food.name)){seen.add(food.name);selected.push(food);}};
-
-  add(best(proteins,3));    // 1 proteina
-  add(best(carbs,2));       // 1 carboidrato
-  add(best(vegs,0.5));      // 1 verdura (peso basso: calorie irrilevanti)
-
-  // Se nessuna verdura disponibile, aggiungi un 2° carboidrato
-  if(!vegs.length){
-    const carbs2=carbs.filter(f=>!seen.has(f.name));
-    add(best(carbs2,1));
+    // Cerca il miglior sostituto in credenza per quello slot
+    const sub = findBestForSlot(slot, pantryFoods, seen, rotationIdx);
+    if(sub) {
+      seen.add(sub.name);
+      selected.push(sub);
+    }
   }
 
-  // Frutto: aggiungilo solo se non ci sono verdure e non già presente
-  if(!vegs.length && !seen.has(best(fruits,1)?.name)){
-    add(best(fruits,1));
-  }
-
-  // Fallback: se mancano ancora alimenti usa quelli con più proteine rimasti
-  if(selected.length<2){
-    pantryFoods
+  // 3. Se non abbiamo trovato abbastanza alimenti (credenza limitata),
+  //    aggiungi i migliori disponibili per macro senza duplicati
+  if(selected.length < 2) {
+    const byProtein = pantryFoods
       .filter(f=>!seen.has(f.name))
-      .sort((a,b)=>b.p-a.p)
-      .slice(0,3-selected.length)
-      .forEach(f=>add(f));
+      .sort((a,b)=>(b.p/(b.cal||1))-(a.p/(a.cal||1)));
+    for(const f of byProtein) {
+      if(selected.length>=3) break;
+      if(!seen.has(f.name)) { seen.add(f.name); selected.push(f); }
+    }
   }
 
   return selected.slice(0,4);
@@ -1595,36 +1699,36 @@ function resolveItalianMealKey(name) {
 
 // Lista tag di esclusione alimenti — ogni id è una keyword per match case-insensitive
 const EXCLUSION_TAGS = [
-  {id:"pollo",     label:"Pollo",           emoji:"🍗"},
-  {id:"tacchino",  label:"Tacchino",        emoji:"🦃"},
-  {id:"manzo",     label:"Manzo/Bovino",    emoji:"🥩"},
-  {id:"maiale",    label:"Maiale",          emoji:"🐷"},
-  {id:"agnello",   label:"Agnello",         emoji:"🐑"},
-  {id:"bresaola",  label:"Bresaola",        emoji:"🥩"},
-  {id:"prosciutto",label:"Prosciutto",      emoji:"🥩"},
-  {id:"salmone",   label:"Salmone",         emoji:"🐠"},
-  {id:"tonno",     label:"Tonno",           emoji:"🐟"},
-  {id:"merluzzo",  label:"Merluzzo",        emoji:"🐡"},
-  {id:"sgombro",   label:"Sgombro",         emoji:"🐟"},
-  {id:"gamber",    label:"Gamberi",         emoji:"🦐"},
-  {id:"cozze",     label:"Cozze/Crostacei", emoji:"🐚"},
-  {id:"latte",     label:"Latte",           emoji:"🥛"},
-  {id:"yogurt",    label:"Yogurt",          emoji:"🫙"},
-  {id:"ricotta",   label:"Ricotta",         emoji:"🧀"},
-  {id:"mozzarella",label:"Mozzarella",      emoji:"🧀"},
-  {id:"formaggio", label:"Formaggio",       emoji:"🧀"},
-  {id:"uov",       label:"Uova",            emoji:"🥚"},
-  {id:"albumi",    label:"Albumi",          emoji:"🥣"},
-  {id:"tofu",      label:"Tofu",            emoji:"🍱"},
-  {id:"tempeh",    label:"Tempeh",          emoji:"🌱"},
-  {id:"soia",      label:"Soia",            emoji:"🫘"},
-  {id:"pasta",     label:"Pasta",           emoji:"🍝"},
-  {id:"riso",      label:"Riso",            emoji:"🍚"},
-  {id:"pane",      label:"Pane",            emoji:"🍞"},
-  {id:"avena",     label:"Avena",           emoji:"🌾"},
-  {id:"farro",     label:"Farro/Orzo",      emoji:"🌾"},
-  {id:"funghi",    label:"Funghi",          emoji:"🍄"},
-  {id:"whey",      label:"Whey/Caseina",    emoji:"🥤"},
+  {id:"pollo",     label:"Pollo",           labelEn:"Chicken",        emoji:"🍗"},
+  {id:"tacchino",  label:"Tacchino",        labelEn:"Turkey",         emoji:"🦃"},
+  {id:"manzo",     label:"Manzo/Bovino",    labelEn:"Beef",           emoji:"🥩"},
+  {id:"maiale",    label:"Maiale",          labelEn:"Pork",           emoji:"🐷"},
+  {id:"agnello",   label:"Agnello",         labelEn:"Lamb",           emoji:"🐑"},
+  {id:"bresaola",  label:"Bresaola",        labelEn:"Bresaola",       emoji:"🥩"},
+  {id:"prosciutto",label:"Prosciutto",      labelEn:"Prosciutto",     emoji:"🥩"},
+  {id:"salmone",   label:"Salmone",         labelEn:"Salmon",         emoji:"🐠"},
+  {id:"tonno",     label:"Tonno",           labelEn:"Tuna",           emoji:"🐟"},
+  {id:"merluzzo",  label:"Merluzzo",        labelEn:"Cod",            emoji:"🐡"},
+  {id:"sgombro",   label:"Sgombro",         labelEn:"Mackerel",       emoji:"🐟"},
+  {id:"gamber",    label:"Gamberi",         labelEn:"Shrimp",         emoji:"🦐"},
+  {id:"cozze",     label:"Cozze/Crostacei", labelEn:"Shellfish",      emoji:"🐚"},
+  {id:"latte",     label:"Latte",           labelEn:"Milk",           emoji:"🥛"},
+  {id:"yogurt",    label:"Yogurt",          labelEn:"Yogurt",         emoji:"🫙"},
+  {id:"ricotta",   label:"Ricotta",         labelEn:"Ricotta",        emoji:"🧀"},
+  {id:"mozzarella",label:"Mozzarella",      labelEn:"Mozzarella",     emoji:"🧀"},
+  {id:"formaggio", label:"Formaggio",       labelEn:"Cheese",         emoji:"🧀"},
+  {id:"uov",       label:"Uova",            labelEn:"Eggs",           emoji:"🥚"},
+  {id:"albumi",    label:"Albumi",          labelEn:"Egg Whites",     emoji:"🥣"},
+  {id:"tofu",      label:"Tofu",            labelEn:"Tofu",           emoji:"🍱"},
+  {id:"tempeh",    label:"Tempeh",          labelEn:"Tempeh",         emoji:"🌱"},
+  {id:"soia",      label:"Soia",            labelEn:"Soy",            emoji:"🫘"},
+  {id:"pasta",     label:"Pasta",           labelEn:"Pasta",          emoji:"🍝"},
+  {id:"riso",      label:"Riso",            labelEn:"Rice",           emoji:"🍚"},
+  {id:"pane",      label:"Pane",            labelEn:"Bread",          emoji:"🍞"},
+  {id:"avena",     label:"Avena",           labelEn:"Oats",           emoji:"🌾"},
+  {id:"farro",     label:"Farro/Orzo",      labelEn:"Spelt/Barley",   emoji:"🌾"},
+  {id:"funghi",    label:"Funghi",          labelEn:"Mushrooms",      emoji:"🍄"},
+  {id:"whey",      label:"Whey/Caseina",    labelEn:"Whey/Casein",    emoji:"🥤"},
 ];
 
 // Restituisce true se il nome cibo contiene una delle keyword escluse
@@ -1636,16 +1740,24 @@ const isExcluded = (foodName, excludedIds) => {
 
 function generateWeeklyPlan(targets, mealList, seed=0, numMeals, excludedFoods=[]) {
   if (!targets || !mealList.length) return null;
-  const nm = numMeals || mealList.length;
   const plan = [];
   for (let day = 0; day < 7; day++) {
     const dayMeals = {};
     mealList.forEach(meal => {
       const mKey = meal.name;
-      const mTgt = mealTarget(targets, mKey, nm);
+      // Usa SEMPRE meal.pct dalla mealList — evita il bug numMeals/MEAL_CONFIGS mismatch
+      // che causava snack a 33% delle calorie invece di 7-8%
+      const pct = meal.pct || (1/mealList.length);
+      const mTgt = {
+        calories: Math.round(targets.calories * pct),
+        protein:  Math.round(targets.protein  * pct),
+        carbs:    Math.round(targets.carbs    * pct),
+        fat:      Math.round(targets.fat      * pct),
+      };
       const recipeKey = resolveItalianMealKey(mKey);
       const templates = WEEK_RECIPES[recipeKey] || WEEK_RECIPES["Pranzo"];
       const template = templates[(day + seed) % templates.length];
+      // Usa direttamente gli alimenti della ricetta (già appetibili per costruzione)
       const foods = template.foods.map(n => findFood(n)).filter(Boolean).filter(f => !isExcluded(f.name, excludedFoods));
       if (!foods.length) { dayMeals[mKey] = []; return; }
       const qtys = optimize(foods, mTgt);
@@ -1661,10 +1773,17 @@ function generateWeeklyPlan(targets, mealList, seed=0, numMeals, excludedFoods=[
 function Logo({ size=48 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
-      <rect width="48" height="48" rx="14" fill={C.acc}/>
-      <path d="M10 36V12l11 15V12M32 12v24" stroke="#030F06" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M32 24h6" stroke="#030F06" strokeWidth="3.5" strokeLinecap="round"/>
-      <circle cx="38" cy="36" r="3.5" fill="#030F06"/>
+      <defs>
+        <linearGradient id="ncLg" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#2DD4BF"/>
+          <stop offset="1" stopColor="#3B82F6"/>
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="13" fill="url(#ncLg)"/>
+      {/* N — left vertical, diagonal, right vertical */}
+      <path d="M8,36 L8,12 L22,36 L22,12" stroke="white" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      {/* C — arc opening toward N */}
+      <path d="M37,16 C34,11 25,11 22,17 C19,21 19,27 22,31 C25,37 34,37 37,32" stroke="white" strokeWidth="3.4" strokeLinecap="round" fill="none"/>
     </svg>
   );
 }
@@ -1673,75 +1792,157 @@ function BackBtn({onClick}) { return <button onClick={onClick} style={{width:40,
 function Spin({size=22,color=C.acc}) { return <div style={{width:size,height:size,borderRadius:"50%",border:`2.5px solid ${color}30`,borderTopColor:color,animation:"spin .8s linear infinite"}}/>; }
 function MacroBar({label,val,target,color}) {
   const pct=Math.min(100,(val/(target||1))*100), over=val>target*1.05;
+  const isGood=pct>=85&&pct<=115;
+  const barColor=over?C.red:color;
+  const barColor2=over?"#FCA5A5":color==="#00E5A0"?"#38BDF8":color==="#38BDF8"?"#A78BFA":"#FDE68A";
   return (
-    <div style={{marginBottom:14}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-        <span style={{fontSize:13,color:C.mid,fontWeight:600}}>{label}</span>
-        <span style={{fontSize:13,fontWeight:700,color:over?C.red:C.txt}}>{rnd(val)}g <span style={{color:C.mid,fontWeight:400}}>/ {target}g</span></span>
+    <div style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:7}}>
+        <span style={{fontSize:12,color:C.mid,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>{label}</span>
+        <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+          <span style={{fontSize:15,fontWeight:900,color:over?C.red:C.txt}}>{rnd(val)}</span>
+          <span style={{fontSize:11,color:C.mid,fontWeight:500}}>/ {target}g</span>
+          <span style={{fontSize:11,fontWeight:800,color:barColor,marginLeft:4,background:`${barColor}18`,padding:"1px 6px",borderRadius:6}}>{Math.round(pct)}%</span>
+        </div>
       </div>
-      <div style={{background:C.dim,borderRadius:6,height:5}}>
-        <div style={{width:`${pct}%`,background:over?C.red:color,borderRadius:6,height:5,transition:"width .4s"}}/>
+      <div style={{background:"rgba(255,255,255,.06)",borderRadius:10,height:10,overflow:"hidden",position:"relative"}}>
+        <div style={{
+          width:`${pct}%`,
+          background:`linear-gradient(90deg, ${barColor}, ${barColor2})`,
+          borderRadius:10, height:10,
+          transition:"width .7s cubic-bezier(.4,0,.2,1)",
+          boxShadow:isGood?`0 0 10px ${barColor}99`:"none",
+          animation:"slideRight .7s ease-out",
+        }}/>
       </div>
     </div>
   );
 }
-function MacroRing({cal,target,size=144}) {
-  const R2=size/2-11, circ=2*Math.PI*R2;
+function MacroRing({cal,target,size=160}) {
+  const R2=size/2-13, circ=2*Math.PI*R2;
   const pct=Math.min(100,(cal/(target||1))*100), over=cal>target*1.05;
+  const gradId=`rg${size}`;
   return (
     <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={size/2} cy={size/2} r={R2} fill="none" stroke={C.dim} strokeWidth={10}/>
-        <circle cx={size/2} cy={size/2} r={R2} fill="none" stroke={over?C.red:C.acc} strokeWidth={10}
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{filter:over?"none":`drop-shadow(0 0 12px #00E5A044)`}}>
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={over?C.red:C.acc}/>
+            <stop offset="100%" stopColor={over?"#FF6B78":C.blu}/>
+          </linearGradient>
+        </defs>
+        <circle cx={size/2} cy={size/2} r={R2} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth={12}/>
+        <circle cx={size/2} cy={size/2} r={R2} fill="none" stroke={`url(#${gradId})`} strokeWidth={12}
           strokeDasharray={`${circ*pct/100} ${circ}`} strokeLinecap="round"
-          transform={`rotate(-90 ${size/2} ${size/2})`} style={{transition:"stroke-dasharray .5s"}}/>
+          transform={`rotate(-90 ${size/2} ${size/2})`}
+          style={{transition:"stroke-dasharray .6s cubic-bezier(.4,0,.2,1)"}}/>
       </svg>
       <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-        <div style={{fontSize:24,fontWeight:900,color:over?C.red:C.acc}}>{rnd(cal)}</div>
-        <div style={{fontSize:10,color:C.mid}}>kcal</div>
+        <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,color:over?C.red:C.acc,lineHeight:1}}>{rnd(cal)}</div>
+        <div style={{fontSize:10,color:C.mid,fontWeight:600,letterSpacing:.5,marginTop:2}}>KCAL</div>
+        <div style={{fontSize:11,fontWeight:700,color:C.mid,marginTop:3}}>{Math.round(pct)}%</div>
       </div>
     </div>
   );
 }
 function MealSummaryBar({tot,target}) {
+  const macros=[["kcal",rnd(tot.cal),target.calories,C.txt,null],[`P`,`${rnd(tot.p)}`,`${target.protein}`,C.acc,"g"],[`C`,`${rnd(tot.c)}`,`${target.carbs}`,C.blu,"g"],[`G`,`${rnd(tot.f)}`,`${target.fat}`,C.ora,"g"]];
   return (
-    <div style={{...cS,marginBottom:20}}>
+    <div style={{
+      background:`linear-gradient(145deg,${C.card},${C.surf})`,
+      borderRadius:22,border:`1px solid ${C.bord}`,
+      padding:"16px 18px",marginBottom:16,
+      boxShadow:"0 4px 20px rgba(0,0,0,.3)",
+    }}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
-        {[["kcal",rnd(tot.cal),target.calories,C.txt],[`P`,`${rnd(tot.p)}g`,`${target.protein}g`,C.acc],[`C`,`${rnd(tot.c)}g`,`${target.carbs}g`,C.blu],[`G`,`${rnd(tot.f)}g`,`${target.fat}g`,C.ora]].map(([l,v,tgt,c])=>(
-          <div key={l} style={{textAlign:"center"}}>
-            <div style={{fontSize:16,fontWeight:800,color:c}}>{v}</div>
-            <div style={{fontSize:10,color:C.dim}}>/ {tgt}</div>
-            <div style={{fontSize:10,color:C.mid}}>{l}</div>
+        {macros.map(([l,v,tgt,c,unit])=>(
+          <div key={l} style={{textAlign:"center",flex:1}}>
+            <div style={{fontSize:9,color:C.mid,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>{l}</div>
+            <div style={{fontSize:17,fontWeight:900,color:c,letterSpacing:-0.5}}>{v}<span style={{fontSize:10,fontWeight:500}}>{unit||""}</span></div>
+            <div style={{fontSize:9,color:C.mid,marginTop:2}}>/{tgt}{unit||""}</div>
           </div>
         ))}
       </div>
-      <div style={{display:"flex",gap:6}}>
+      <div style={{display:"flex",gap:5}}>
         {[[tot.p,target.protein,C.acc],[tot.c,target.carbs,C.blu],[tot.f,target.fat,C.ora]].map(([e,thr,c],i)=>{
           const pct=Math.min(100,(e/(thr||1))*100), ov=e>thr*1.05;
-          return <div key={i} style={{flex:1,background:C.dim,borderRadius:4,height:4,overflow:"hidden"}}><div style={{width:`${pct}%`,background:ov?C.red:c,height:4}}/></div>;
+          return <div key={i} style={{flex:1,background:"rgba(255,255,255,.06)",borderRadius:6,height:6,overflow:"hidden"}}><div style={{width:`${pct}%`,background:ov?C.red:c,height:6,borderRadius:6,transition:"width .6s"}}/></div>;
         })}
       </div>
     </div>
   );
 }
+const NAV_ICONS = {
+  today: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path d="M3 12L12 3L21 12V20C21 20.55 20.55 21 20 21H15V15H9V21H4C3.45 21 3 20.55 3 20V12Z"
+        fill={active?"url(#ng0)":"none"} stroke={active?"url(#ng0)":C.mid} strokeWidth="1.8" strokeLinejoin="round"/>
+      <defs><linearGradient id="ng0" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor={C.acc}/><stop offset="100%" stopColor={C.blu}/></linearGradient></defs>
+    </svg>
+  ),
+  piano: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="5" width="18" height="16" rx="3" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.8" fill={active?"url(#ng4)":"none"} fillOpacity={active?.15:0}/>
+      <line x1="3" y1="10" x2="21" y2="10" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.5"/>
+      <line x1="8" y1="3" x2="8" y2="7" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.8" strokeLinecap="round"/>
+      <line x1="16" y1="3" x2="16" y2="7" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.8" strokeLinecap="round"/>
+      <rect x="7" y="13.5" width="3" height="3" rx="1" fill={active?"url(#ng4)":C.mid} opacity={active?1:.7}/>
+      <rect x="14" y="13.5" width="3" height="3" rx="1" fill={active?"url(#ng4)":C.mid} opacity={active?1:.4}/>
+      <defs><linearGradient id="ng4" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor={C.acc}/><stop offset="100%" stopColor={C.blu}/></linearGradient></defs>
+    </svg>
+  ),
+  progress: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="12" width="4" height="9" rx="2" fill={active?"url(#ng1)":C.mid} opacity={active?1:.7}/>
+      <rect x="10" y="7" width="4" height="14" rx="2" fill={active?"url(#ng1)":C.mid} opacity={active?1:.5}/>
+      <rect x="17" y="3" width="4" height="18" rx="2" fill={active?"url(#ng1)":C.mid} opacity={active?1:.3}/>
+      <defs><linearGradient id="ng1" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor={C.acc}/><stop offset="100%" stopColor={C.blu}/></linearGradient></defs>
+    </svg>
+  ),
+  credenza: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path d="M9 3H15C15 3 16 3 16.5 4L19 9H5L7.5 4C8 3 9 3 9 3Z" stroke={active?"url(#ng2)":C.mid} strokeWidth="1.8" fill={active?"url(#ng2)":"none"} fillOpacity={active?.2:0} strokeLinejoin="round"/>
+      <rect x="4" y="9" width="16" height="12" rx="2" stroke={active?"url(#ng2)":C.mid} strokeWidth="1.8" fill={active?"url(#ng2)":"none"} fillOpacity={active?.1:0}/>
+      <line x1="4" y1="13" x2="20" y2="13" stroke={active?"url(#ng2)":C.mid} strokeWidth="1.5"/>
+      <defs><linearGradient id="ng2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor={C.ora}/><stop offset="100%" stopColor={C.yel}/></linearGradient></defs>
+    </svg>
+  ),
+  profile: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="8" r="4" stroke={active?"url(#ng3)":C.mid} strokeWidth="1.8" fill={active?"url(#ng3)":"none"} fillOpacity={active?.2:0}/>
+      <path d="M4 20C4 16.7 7.6 14 12 14C16.4 14 20 16.7 20 20" stroke={active?"url(#ng3)":C.mid} strokeWidth="1.8" strokeLinecap="round"/>
+      <defs><linearGradient id="ng3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor={C.blu}/><stop offset="100%" stopColor={C.pur}/></linearGradient></defs>
+    </svg>
+  ),
+};
 function BottomNav({tab,setTab,lang,setSubScreen}) {
-  const tabs=[["today","🏠",t("today",lang)],["progress","📊",t("progress",lang)],["credenza","🫙",t("pantryTab",lang)],["profile","👤",t("profile",lang)]];
-  const handleTab=(id)=>{ setTab(id); if(setSubScreen) setSubScreen(null); };
+  const tabs=[["today",t("today",lang)],["piano",t("pianoTab",lang)],["progress",t("progress",lang)],["credenza",t("pantryTab",lang)],["profile",t("profile",lang)]];
   return (
-    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:C.surf,borderTop:`1px solid ${C.bord}`,display:"flex",zIndex:50}}>
-      {tabs.map(([id,ic,lbl])=>(
-        <button key={id} onClick={()=>handleTab(id)} style={{flex:1,padding:"10px 0 16px",background:"none",border:"none",cursor:"pointer",color:tab===id?C.acc:C.mid,fontFamily:ff,display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"color .2s"}}>
-          <span style={{fontSize:21}}>{ic}</span>
-          <span style={{fontSize:9,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>{lbl}</span>
-        </button>
-      ))}
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:`rgba(13,20,34,.92)`,borderTop:`1px solid ${C.bord}`,display:"flex",padding:"10px 4px 24px",zIndex:50,backdropFilter:"blur(20px)"}}>
+      {tabs.map(([id,lbl])=>{
+        const active=tab===id;
+        return (
+          <button key={id} onClick={()=>{setTab(id);setSubScreen&&setSubScreen(null);}}
+            style={{flex:1,background:"none",border:"none",color:active?C.acc:C.mid,cursor:"pointer",padding:"4px 0",fontFamily:ff,display:"flex",flexDirection:"column",alignItems:"center",gap:4,position:"relative",transition:"color .2s"}}>
+            {active&&(
+              <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",width:40,height:3,borderRadius:99,background:`linear-gradient(90deg,${C.acc},${C.blu})`,boxShadow:`0 0 12px ${C.acc}99`}}/>
+            )}
+            <div style={{
+              width:46,height:36,borderRadius:12,
+              background:active?`linear-gradient(135deg,${C.acc}18,${C.blu}12)`:"transparent",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              transition:"background .25s, transform .2s",
+              transform:active?"scale(1.1)":"scale(1)",
+            }}>
+              {NAV_ICONS[id]?.(active)}
+            </div>
+            <div style={{fontSize:10,fontWeight:active?800:500,letterSpacing:.3}}>{lbl}</div>
+          </button>
+        );
+      })}
     </div>
   );
 }
-
-
-
-// INTERNAZIONALIZZAZIONE
 const LANG = {
   it: {
     today:"Oggi", progress:"Progressi", pantryTab:"Credenza", profile:"Profilo",
@@ -1900,7 +2101,6 @@ const LANG = {
     caloriesTarget:"Calorie target",
   },
 };
-let _lang = localStorage.getItem("nc2-lang")||"it";
 function t(key, lang, vars) {
   // Supporta sia t(key) che t(key,lang) che t(key,vars)
   if(lang && typeof lang==="object" && !Array.isArray(lang)) { vars=lang; lang=null; }
@@ -1911,42 +2111,96 @@ function t(key, lang, vars) {
 }
 function setLang(l) { _lang=l; localStorage.setItem("nc2-lang",l); }
 
+// LANGUAGE SELECT SCREEN
+function LangSelectScreen({ onSelect }) {
+  const features = [
+    { icon:"🎯", it:"Calcola calorie e macro in base ai tuoi dati reali", en:"Calculate calories and macros from your real data" },
+    { icon:"🫙", it:"Credenza: costruisci pasti dagli alimenti di casa", en:"Pantry: build meals from foods you have at home" },
+    { icon:"✨", it:"Piano pasti settimanale generato in automatico", en:"Auto-generated weekly meal plan" },
+    { icon:"📦", it:"Milioni di alimenti — cerca o scansiona il barcode", en:"Millions of foods — search or scan barcodes" },
+    { icon:"📊", it:"Progressi, diario alimentare e analisi BIA", en:"Progress tracking, food diary and BIA analysis" },
+  ];
+  return (
+    <div style={{...ss, display:"flex", flexDirection:"column", justifyContent:"center", minHeight:"100vh", padding:"0 28px"}}>
+      <style>{FONTS}</style>
+      <div style={{maxWidth:430, margin:"0 auto", width:"100%", paddingTop:56, paddingBottom:56}}>
+        <div style={{display:"flex", alignItems:"center", gap:16, marginBottom:10}}>
+          <Logo size={56}/>
+          <div>
+            <div style={{fontSize:28, fontWeight:900, letterSpacing:-1, background:"linear-gradient(90deg,#2DD4BF,#60A5FA)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent"}}>NutriCalc</div>
+            <div style={{fontSize:12, color:C.mid, marginTop:2}}>Nutrition · Nutrizione</div>
+          </div>
+        </div>
+        <div style={{fontSize:15, fontWeight:600, color:C.txt, marginBottom:28, opacity:0.7, fontStyle:"italic"}}>
+          Eat smart. Live better. · Mangia bene. Vivi meglio.
+        </div>
+        <div style={{marginBottom:32}}>
+          {features.map(({icon, it, en}) => (
+            <div key={icon} style={{display:"flex", gap:14, marginBottom:14, alignItems:"flex-start"}}>
+              <span style={{fontSize:18, flexShrink:0, marginTop:2}}>{icon}</span>
+              <div>
+                <div style={{fontSize:14, color:C.txt, fontWeight:600, lineHeight:1.4}}>{it}</div>
+                <div style={{fontSize:12, color:C.mid, lineHeight:1.4}}>{en}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:11, color:C.mid, textAlign:"center", marginBottom:14, letterSpacing:1, textTransform:"uppercase", fontWeight:700}}>
+          Scegli la lingua · Choose your language
+        </div>
+        <div style={{display:"flex", gap:12}}>
+          {[["it","🇮🇹","Italiano"],["en","🇬🇧","English"]].map(([l, flag, label]) => (
+            <button key={l} onClick={()=>onSelect(l)} style={{flex:1, padding:"18px 12px", borderRadius:16, border:`1.5px solid ${C.bord2}`, background:C.card, color:C.txt, cursor:"pointer", fontFamily:ff, display:"flex", flexDirection:"column", alignItems:"center", gap:6, transition:"border-color .2s"}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=C.acc}
+              onMouseLeave={e=>e.currentTarget.style.borderColor=C.bord2}>
+              <span style={{fontSize:22}}>{flag}</span>
+              <span style={{fontSize:13, fontWeight:700}}>{label}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{marginTop:32, textAlign:"center", fontSize:11, color:C.mid, opacity:0.6}}>
+          © 2025 Giovanni Guida · NutriCalc
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // WELCOME SLIDESHOW
-const SLIDES = [
-  {
-    emoji: "🥗",
-    color: "#00A84B",
-    title: _lang==="en"?"Your personalized nutrition plan":"Il tuo piano nutrizionale su misura",
-    text: _lang==="en"?"NutriCalc calculates calories and macros based on your real data: weight, height, goal and activity level. No generic values.":"NutriCalc calcola calorie e macro in base ai tuoi dati reali: peso, altezza, obiettivo e livello di attività. Niente valori generici.",
-  },
-  {
-    emoji: "🫙",
-    color: "#2563EB",
-    title: "Crea la tua Credenza",
-    text: "Salva nella Credenza gli alimenti che hai in casa con le relative quantità. La app li usa come punto di partenza per costruire i tuoi pasti.",
-  },
-  {
-    emoji: "✨",
-    color: "#EA6C00",
-    title: "Pasti generati automaticamente",
-    text: "Con un solo tasto, NutriCalc genera la composizione del pasto usando gli alimenti della tua Credenza e calcola le quantità esatte per raggiungere i tuoi macro.",
-  },
-  {
-    emoji: "📦",
-    color: "#7C3AED",
-    title: "Milioni di alimenti a portata di mano",
-    text: "Cerca qualsiasi alimento per nome o scansiona il codice a barre con la fotocamera. Salva i prodotti che usi spesso nel tuo database personale.",
-  },
-  {
-    emoji: "📊",
-    color: "#DC2626",
-    title: "Monitora i tuoi progressi",
-    text: "Registra il peso ogni settimana e segui la curva nel tempo. Modifica il piano in qualsiasi momento: puoi aggiustare calorie e percentuali dei macro a tuo piacimento.",
-  },
-];
+function getSlides(L) {
+  return [
+    {
+      emoji:"🥗", color:"#00A84B",
+      title: L==="en"?"Your personalized nutrition plan":"Il tuo piano nutrizionale su misura",
+      text:  L==="en"?"NutriCalc calculates calories and macros based on your real data: weight, height, goal and activity level. No generic values.":"NutriCalc calcola calorie e macro in base ai tuoi dati reali: peso, altezza, obiettivo e livello di attività. Niente valori generici.",
+    },
+    {
+      emoji:"🫙", color:"#2563EB",
+      title: L==="en"?"Build your Pantry":"Crea la tua Credenza",
+      text:  L==="en"?"Save foods you have at home with their quantities. The app uses them as the starting point to build your meals.":"Salva nella Credenza gli alimenti che hai in casa con le relative quantità. La app li usa come punto di partenza per costruire i tuoi pasti.",
+    },
+    {
+      emoji:"✨", color:"#EA6C00",
+      title: L==="en"?"Auto-generated meals":"Pasti generati automaticamente",
+      text:  L==="en"?"With one tap, NutriCalc generates your meal using Pantry foods and calculates exact quantities to hit your macros.":"Con un solo tasto, NutriCalc genera la composizione del pasto usando gli alimenti della tua Credenza e calcola le quantità esatte per raggiungere i tuoi macro.",
+    },
+    {
+      emoji:"📦", color:"#7C3AED",
+      title: L==="en"?"Millions of foods at your fingertips":"Milioni di alimenti a portata di mano",
+      text:  L==="en"?"Search any food by name or scan the barcode with your camera. Save frequently used products to your personal database.":"Cerca qualsiasi alimento per nome o scansiona il codice a barre con la fotocamera. Salva i prodotti che usi spesso nel tuo database personale.",
+    },
+    {
+      emoji:"📊", color:"#DC2626",
+      title: L==="en"?"Track your progress":"Monitora i tuoi progressi",
+      text:  L==="en"?"Log your weight every week and follow the curve over time. Adjust your plan at any time: change calories and macro percentages as you like.":"Registra il peso ogni settimana e segui la curva nel tempo. Modifica il piano in qualsiasi momento: puoi aggiustare calorie e percentuali dei macro a tuo piacimento.",
+    },
+  ];
+}
 
 function WelcomeSlideshow({onDone}) {
   const [idx, setIdx] = useState(0);
+  const L = _lang;
+  const SLIDES = getSlides(L);
   const slide = SLIDES[idx];
   const isLast = idx === SLIDES.length - 1;
 
@@ -1955,7 +2209,7 @@ function WelcomeSlideshow({onDone}) {
       <style>{FONTS}</style>
       {/* Skip */}
       <div style={{display:"flex", justifyContent:"flex-end", paddingTop:52, marginBottom:0}}>
-        <button onClick={onDone} style={{background:"none", border:"none", color:C.mid, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:ff}}>Salta →</button>
+        <button onClick={onDone} style={{background:"none", border:"none", color:C.mid, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:ff}}>{L==="en"?"Skip →":"Salta →"}</button>
       </div>
 
       {/* Slide content */}
@@ -1994,13 +2248,13 @@ function WelcomeSlideshow({onDone}) {
       {/* Buttons */}
       <div style={{display:"flex", gap:10, paddingBottom:52}}>
         {idx > 0 && (
-          <button onClick={()=>setIdx(i=>i-1)} style={{...bS, flex:1}}>← Indietro</button>
+          <button onClick={()=>setIdx(i=>i-1)} style={{...bS, flex:1}}>{L==="en"?"← Back":"← Indietro"}</button>
         )}
         <button
           onClick={()=>{ if(isLast) onDone(); else setIdx(i=>i+1); }}
           style={{...bP, flex:2, background:slide.color}}
         >
-          {isLast ? "Inizia subito 🚀" : "Avanti →"}
+          {isLast ? (L==="en"?"Start now 🚀":"Inizia subito 🚀") : (L==="en"?"Next →":"Avanti →")}
         </button>
       </div>
     </div>
@@ -2073,20 +2327,30 @@ function AuthScreen({onAuth}) {
   );
 
   return (
-    <div style={{...ss,display:"flex",flexDirection:"column",justifyContent:"center",minHeight:"100vh"}}>
+    <div style={{...ss,display:"flex",flexDirection:"column",justifyContent:"center",minHeight:"100vh",position:"relative",overflow:"hidden"}}>
       <style>{FONTS}</style>
-      <div style={{padding:"0 28px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:40}}>
-          <Logo size={52}/>
-          <div>
-            <div style={{fontSize:26,fontWeight:900,letterSpacing:-0.5}}>NutriCalc</div>
-            <div style={{fontSize:13,color:C.mid}}>{_lang==="en"?"Your nutritional plan":"Il tuo piano nutrizionale"}</div>
+      {/* Decorative background glows */}
+      <div style={{position:"absolute",top:"10%",left:"50%",transform:"translateX(-50%)",width:300,height:300,borderRadius:"50%",background:`radial-gradient(circle, ${C.acc}10 0%, transparent 65%)`,pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:"5%",right:"-20%",width:250,height:250,borderRadius:"50%",background:`radial-gradient(circle, ${C.blu}08 0%, transparent 65%)`,pointerEvents:"none"}}/>
+      <div style={{padding:"0 28px",position:"relative",zIndex:1}}>
+        {/* Logo & Branding */}
+        <div style={{textAlign:"center",marginBottom:36}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:72,height:72,borderRadius:22,background:`linear-gradient(135deg,${C.acc}22,${C.blu}15)`,border:`1px solid ${C.acc}33`,marginBottom:16,boxShadow:`0 8px 32px ${C.acc}22`}}>
+            <Logo size={44}/>
           </div>
+          <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,background:"linear-gradient(90deg,#2DD4BF,#60A5FA)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>NutriCalc</div>
+          <div style={{fontSize:13,color:C.mid,marginTop:4,fontWeight:500,fontStyle:"italic"}}>{_lang==="en"?"Eat smart. Live better.":"Mangia bene. Vivi meglio."}</div>
         </div>
 
-        <div style={{display:"flex",background:C.surf,borderRadius:14,padding:4,border:`1px solid ${C.bord}`,marginBottom:28}}>
+        <div style={{display:"flex",background:"rgba(255,255,255,.04)",borderRadius:16,padding:4,border:`1px solid ${C.bord}`,marginBottom:28}}>
           {[["login",t("signIn",_lang)],["register",t("register",_lang)]].map(([m,l])=>(
-            <button key={m} onClick={()=>{setMode(m);setErr("");}} style={{flex:1,padding:"10px 0",borderRadius:11,border:"none",background:mode===m?C.cardHi:"transparent",color:mode===m?C.txt:C.mid,fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:ff,transition:"all .2s"}}>{l}</button>
+            <button key={m} onClick={()=>{setMode(m);setErr("");}} style={{
+              flex:1,padding:"11px 0",borderRadius:13,border:"none",
+              background:mode===m?`linear-gradient(135deg,${C.card},${C.cardHi})`:"transparent",
+              color:mode===m?C.txt:C.mid,
+              fontWeight:800,cursor:"pointer",fontSize:14,fontFamily:ff,transition:"all .2s",
+              boxShadow:mode===m?"0 2px 8px rgba(0,0,0,.3)":"none",
+            }}>{l}</button>
           ))}
         </div>
 
@@ -2119,17 +2383,18 @@ function AuthScreen({onAuth}) {
             </div>
           </div>
         )}
-        {err && <div style={{background:C.rLo,border:`1px solid ${C.red}33`,borderRadius:12,padding:"10px 14px",color:C.red,fontSize:13,marginBottom:16}}>{err}</div>}
+        {err && <div style={{background:C.rLo,border:`1px solid ${C.red}44`,borderRadius:14,padding:"12px 16px",color:C.red,fontSize:13,marginBottom:16,fontWeight:600}}>{err}</div>}
         <button onClick={submit} disabled={loading} style={{...bP,marginBottom:14,opacity:loading?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          {loading?<Spin size={18} color="#0D1117"/>:mode==="login"?t("signIn",_lang):t("createAccount",_lang)}
+          {loading?<Spin size={18} color="#060A10"/>:mode==="login"?t("signIn",_lang):t("createAccount",_lang)}
         </button>
         {supabase && (
-          <button onClick={google} style={{...bS,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+          <button onClick={google} style={{...bS,display:"flex",alignItems:"center",justifyContent:"center",gap:10,border:`1.5px solid ${C.bord2}`}}>
             <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
             Continua con Google
           </button>
         )}
-        {!supabase && <div style={{marginTop:20,padding:14,background:C.surf,borderRadius:12,border:`1px solid ${C.bord}`,fontSize:12,color:C.mid,lineHeight:1.7}}>Configura le variabili REACT_APP_SUPABASE_URL e REACT_APP_SUPABASE_ANON_KEY per attivare il login.</div>}
+        {!supabase && <div style={{marginTop:20,padding:14,background:"rgba(255,255,255,.03)",borderRadius:14,border:`1px solid ${C.bord}`,fontSize:12,color:C.mid,lineHeight:1.7}}>Configura le variabili REACT_APP_SUPABASE_URL e REACT_APP_SUPABASE_ANON_KEY per attivare il login.</div>}
+        <div style={{marginTop:32,textAlign:"center",fontSize:11,color:C.mid,opacity:0.5}}>© 2025 Giovanni Guida · NutriCalc</div>
       </div>
     </div>
   );
@@ -2138,27 +2403,25 @@ function AuthScreen({onAuth}) {
 // ONBOARDING (multi-step)
 function OnboardingScreen({user,onComplete,isNewUser}) {
   const _l = localStorage.getItem("nc2-lang")||"it";
-  // Se l'utente non è nuovo (ha già un profilo), partiamo dallo step 1 (dati fisici)
-  // Se è nuovo, partiamo dallo step 0 (scelta lingua)
-  const startStep = isNewUser!==false ? 0 : 1;
+  // Lingua già scelta su LangSelectScreen — partiamo sempre dallo step 1
+  const startStep = 1;
   const [step,setStep]=useState(startStep);
   const [selLang,setSelLang]=useState(_l);
   const [profile,setProfile]=useState({name:user?.user_metadata?.name||"",gender:"m",age:"",weight:"",height:"",bodyFat:"",activity:1.55,goal:"lose",numMeals:3,excludedFoods:[],bia_fm:"",bia_vf:"",bia_bmr:"",bia_ffm:"",bia_sc_fat:"",bia_smi:"",bia_whr:"",bia_smm:""});
   const [results,setResults]=useState(null);
   const [selectedProtocol,setSelectedProtocol]=useState(null);
   const p=(k,v)=>setProfile(prev=>({...prev,[k]:v}));
-  // Step 0=Lingua (solo nuovi), 1=Profilo, 2=Attività, 3=Obiettivo, 4=Pasti, 5=Risultati
-  const STEPS = isNewUser!==false
-    ? (selLang==="en"?["Language","Profile","Activity","Goal","Meals","Exclusions","Results"]:["Lingua","Profilo","Attività","Obiettivo","Pasti","Alimenti","Risultati"])
-    : (selLang==="en"?["Profile","Activity","Goal","Meals","Exclusions","Results"]:["Profilo","Attività","Obiettivo","Pasti","Alimenti","Risultati"]);
+  // Step 1=Profilo, 2=Attività, 3=Obiettivo, 4=Pasti, 5=Esclusioni, 6=Risultati
+  const STEPS = selLang==="en"
+    ? ["Profile","Activity","Goal","Meals","Exclusions","Results"]
+    : ["Profilo","Attività","Obiettivo","Pasti","Alimenti","Risultati"];
 
   const next=()=>{
-    if(step===0 && isNewUser!==false){ setLang(selLang); localStorage.setItem("nc2-lang",selLang); }
-    const lastDataStep = isNewUser!==false ? 4 : 3;
+    const lastDataStep = 4;
     if (step===lastDataStep) { const r=calcMacros(profile); setResults(r); }
-    setStep(s=>Math.min(s+1, isNewUser!==false ? 6 : 5));
+    setStep(s=>Math.min(s+1, 6));
   };
-  const prev=()=>setStep(s=>Math.max(s,startStep+1)>startStep?s-1:s);
+  const prev=()=>setStep(s=>s>startStep?s-1:s);
   const done=()=>onComplete(profile,results,selectedProtocol);
 
   const stepValid=()=>{
@@ -2176,7 +2439,7 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
           <Logo size={44}/>
           <div>
             <div style={{fontSize:22,fontWeight:800}}>NutriCalc</div>
-            <div style={{fontSize:12,color:C.mid}}>Passo {step+1} di {STEPS.length}</div>
+            <div style={{fontSize:12,color:C.mid}}>{selLang==="en"?"Step":"Passo"} {step} / {STEPS.length}</div>
           </div>
         </div>
         <div style={{display:"flex",gap:6,marginBottom:36}}>
@@ -2184,19 +2447,6 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
             <div key={i} style={{flex:1,height:4,borderRadius:2,background:i<=(step-startStep)?C.acc:C.dim,transition:"background .3s"}}/>
           ))}
         </div>
-
-        {step===0 && (
-          <div style={{animation:"fadeUp .4s ease"}}>
-            <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,lineHeight:1.2,marginBottom:8}}>Welcome / Benvenuto!</div>
-            <div style={{fontSize:14,color:C.mid,marginBottom:28,lineHeight:1.6}}>Choose your language / Scegli la tua lingua</div>
-            {[["it","🇮🇹 Italiano","La lingua dell'interfaccia sarà l'italiano"],["en","🇬🇧 English","The interface language will be English"]].map(([l,lbl,sub])=>(
-              <div key={l} onClick={()=>setSelLang(l)} style={{...cS,cursor:"pointer",border:`2px solid ${selLang===l?C.acc:C.bord}`,background:selLang===l?C.aLo:C.card,marginBottom:12}}>
-                <div style={{fontWeight:700,fontSize:16,color:selLang===l?C.acc:C.txt,marginBottom:3}}>{lbl}</div>
-                <div style={{fontSize:13,color:C.mid}}>{sub}</div>
-              </div>
-            ))}
-          </div>
-        )}
 
         {step===1 && (
           <div style={{animation:"fadeUp .4s ease"}}>
@@ -2285,7 +2535,7 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
           </div>
         )}
 
-        {(isNewUser!==false?step===5:step===4) && (
+        {step===5 && (
           <div style={{animation:"fadeUp .4s ease"}}>
             <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,lineHeight:1.2,marginBottom:8}}>{selLang==="en"?"Excluded foods":"Alimenti da escludere"}</div>
             <div style={{fontSize:14,color:C.mid,marginBottom:20,lineHeight:1.6}}>{selLang==="en"?"The app will never use these foods when generating automatic meal plans. Skip if you have no restrictions.":"La app non userà mai questi alimenti quando genera i piani automatici. Salta se non hai restrizioni."}</div>
@@ -2295,7 +2545,7 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
                 return (
                   <button key={tag.id} onClick={()=>p("excludedFoods",sel?(profile.excludedFoods||[]).filter(x=>x!==tag.id):[...(profile.excludedFoods||[]),tag.id])}
                     style={{padding:"8px 14px",borderRadius:20,border:`2px solid ${sel?C.red:C.bord}`,background:sel?C.rLo:C.surf,color:sel?C.red:C.mid,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:13,display:"flex",alignItems:"center",gap:5}}>
-                    <span>{tag.emoji}</span>{selLang==="en"?tag.label:tag.label}
+                    <span>{tag.emoji}</span>{selLang==="en"?tag.labelEn:tag.label}
                     {sel&&<span style={{fontSize:11}}>✕</span>}
                   </button>
                 );
@@ -2309,7 +2559,7 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
           </div>
         )}
 
-        {(isNewUser!==false?step===6:step===5) && results && (
+        {step===6 && results && (
           <div style={{animation:"fadeUp .4s ease"}}>
             <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,lineHeight:1.2,marginBottom:6}}>{selLang==="en"?"Your plan":"Il tuo piano"}</div>
             <div style={{fontSize:14,color:C.mid,marginBottom:24}}>{selLang==="en"?"Method:":"Metodo:"} {results.method||"Mifflin-St Jeor"}{results.lbm>0?` · LBM: ${results.lbm} kg`:""}</div>
@@ -2344,7 +2594,7 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
             <div style={{...cS,background:C.bLo,border:`1px solid ${C.blu}33`}}>
               <div style={{fontSize:11,fontWeight:700,color:C.blu+"88",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Per pasto ({profile.numMeals} pasti)</div>
               <div style={{display:"flex",justifyContent:"space-between"}}>
-                {[["kcal",Math.round(results.calories*0.35),C.txt],["Prot",Math.round(results.protein*0.35)+"g",C.acc],["Carbo",Math.round(results.carbs*0.35)+"g",C.blu],["Grassi",Math.round(results.fat*0.35)+"g",C.ora]].map(([l,v,c])=>(
+                {(()=>{const f=1/profile.numMeals;return[["kcal",Math.round(results.calories*f),C.txt],["Prot",Math.round(results.protein*f)+"g",C.acc],["Carbo",Math.round(results.carbs*f)+"g",C.blu],["Grassi",Math.round(results.fat*f)+"g",C.ora]];})().map(([l,v,c])=>(
                   <div key={l} style={{textAlign:"center"}}>
                     <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div>
                     <div style={{fontSize:11,color:C.mid,marginTop:2}}>{l}</div>
@@ -2379,12 +2629,12 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
         )}
 
         <div style={{display:"flex",gap:10,marginTop:28}}>
-          {step>0&&<button onClick={prev} style={{...bS,flex:1}}>← Indietro</button>}
-          {step<(isNewUser!==false?6:5)
+          {step>startStep&&<button onClick={prev} style={{...bS,flex:1}}>{selLang==="en"?"← Back":"← Indietro"}</button>}
+          {step<6
             ? <button onClick={next} disabled={!stepValid()} style={{...bP,flex:step>startStep?2:1,opacity:stepValid()?1:.4}}>{selLang==="en"?"Next →":"Avanti →"}</button>
             : <div style={{flex:2,display:"flex",flexDirection:"column",gap:10}}>
-                <button onClick={done} style={{...bP,animation:"glow 2s ease-in-out infinite"}}>Inizia NutriCalc 🚀</button>
-                <button onClick={()=>{setStep(startStep+1);setResults(null);}} style={{...bS,fontSize:13}}>🔄 {selLang==="en"?"Recalculate":"Ricalcola"}</button>
+                <button onClick={done} style={{...bP,animation:"glow 2s ease-in-out infinite"}}>{selLang==="en"?"Start NutriCalc 🚀":"Inizia NutriCalc 🚀"}</button>
+                <button onClick={()=>{setStep(2);setResults(null);}} style={{...bS,fontSize:13}}>🔄 {selLang==="en"?"Recalculate":"Ricalcola"}</button>
               </div>
           }
         </div>
@@ -2417,7 +2667,7 @@ function WeightModal({profile,onSave,onSkip,lang}) {
 }
 
 // TODAY SCREEN
-function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,planMealTargets,profile,lang,weightLog,confirmedMeals,onConfirmMeal,onMealClick,onCustomize,onRegenFromPantry,onWeightUpdate,onPhotoMeal,pantry,customFoods,onSwapFood,onOpenPiano,onOpenImport,onOpenDiary}) {
+function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,planMealTargets,profile,lang,weightLog,confirmedMeals,lockedMeals,onConfirmMeal,onUnlockMeal,onMealClick,onCustomize,onRegenFromPantry,onWeightUpdate,onPhotoMeal,pantry,customFoods,onSwapFood,onOpenPiano,onOpenImport,onOpenDiary}) {
   const [swapModal,setSwapModal]=useState(null); // {mealName, itemIndex, item}
   const [fabOpen,setFabOpen]=useState(false);
   useEffect(()=>{ return ()=>setFabOpen(false); },[]);
@@ -2434,7 +2684,8 @@ function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,plan
 
   const planDay = weeklyPlan ? weeklyPlan[dayIdx] : null;
   const displayMeals = isCustomized ? meals : (planDay || meals);
-  const planTot = mealList.length ? totals(Object.values(displayMeals).flat()) : allTot;
+  const activeMealNamesSet = new Set(mealList.map(m=>m.name));
+  const planTot = mealList.length ? totals(Object.entries(displayMeals).filter(([k])=>activeMealNamesSet.has(k)).flatMap(([,v])=>v)) : allTot;
 
   // Target giornaliero: se esiste pianMealTargets somma i target per pasto (riflette la dieta importata)
   // altrimenti usa i target globali
@@ -2468,151 +2719,239 @@ function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,plan
         />
       )}
       {showWeightBanner&&(
-        <div onClick={onWeightUpdate} style={{display:"flex",alignItems:"center",gap:10,background:"#FFF3E022",border:`1.5px solid ${C.ora}55`,borderRadius:14,padding:"12px 16px",marginBottom:14,cursor:"pointer"}}>
-          <span style={{fontSize:22}}>⚖️</span>
+        <div onClick={onWeightUpdate} style={{display:"flex",alignItems:"center",gap:12,background:`linear-gradient(135deg,${C.oLo},transparent)`,border:`1.5px solid ${C.ora}44`,borderRadius:16,padding:"13px 16px",marginBottom:16,cursor:"pointer",boxShadow:`0 4px 16px ${C.ora}18`}}>
+          <div style={{width:38,height:38,borderRadius:12,background:`${C.ora}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>⚖️</div>
           <div style={{flex:1}}>
-            <div style={{fontWeight:700,fontSize:13,color:C.ora}}>{lang==="en"?"Time to update your weight":"Aggiorna il tuo peso"}</div>
-            <div style={{fontSize:11,color:C.mid,marginTop:1}}>{lang==="en"?`Last update ${Math.floor(daysSinceWeight)} days ago`:`Ultimo aggiornamento ${Math.floor(daysSinceWeight)} giorni fa`}</div>
+            <div style={{fontWeight:800,fontSize:13,color:C.ora}}>{lang==="en"?"Time to update your weight":"Aggiorna il tuo peso"}</div>
+            <div style={{fontSize:11,color:C.mid,marginTop:2}}>{lang==="en"?`Last update ${Math.floor(daysSinceWeight)} days ago`:`Ultimo aggiornamento ${Math.floor(daysSinceWeight)} giorni fa`}</div>
           </div>
-          <span style={{color:C.ora,fontSize:18}}>›</span>
+          <div style={{width:28,height:28,borderRadius:8,background:`${C.ora}22`,display:"flex",alignItems:"center",justifyContent:"center",color:C.ora,fontSize:16,fontWeight:900}}>›</div>
         </div>
       )}
-      <div style={{marginBottom:22}}>
-        <div style={{fontSize:13,color:C.mid,marginBottom:3,textTransform:"capitalize"}}>{todayLabel}</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-          <div style={{fontSize:24,fontWeight:900,letterSpacing:-0.8,flex:1}}>{greet}{profile.name?`, ${profile.name.split(" ")[0]}`:""}!</div>
+
+      {/* HERO HEADER */}
+      <div style={{
+        background:`linear-gradient(135deg, #142232 0%, #0A1520 50%, #142232 100%)`,
+        borderRadius:24, border:`1px solid ${C.bord}`,
+        padding:"20px 20px 18px", marginBottom:16,
+        boxShadow:"0 8px 32px rgba(0,0,0,.4)",
+        position:"relative", overflow:"hidden",
+      }}>
+        <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:`radial-gradient(circle, ${C.acc}18 0%, transparent 70%)`,pointerEvents:"none"}}/>
+        <div style={{position:"absolute",bottom:-20,left:-10,width:80,height:80,borderRadius:"50%",background:`radial-gradient(circle, ${C.blu}12 0%, transparent 70%)`,pointerEvents:"none"}}/>
+        <div style={{fontSize:12,color:C.mid,fontWeight:600,letterSpacing:.5,textTransform:"capitalize",marginBottom:6}}>{todayLabel}</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:26,fontWeight:900,letterSpacing:-1,lineHeight:1.2,background:`linear-gradient(90deg,${C.txt},${C.mid})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+              {greet}
+            </div>
+            {profile.name&&<div style={{fontSize:22,fontWeight:900,letterSpacing:-0.8,color:C.acc}}>{profile.name.split(" ")[0]}</div>}
+          </div>
           <button onClick={onCustomize} style={{
-            padding:"8px 14px",borderRadius:12,
-            border:`1.5px solid ${isCustomized?C.acc:C.bord}`,
-            background:isCustomized?C.aLo:"transparent",
+            padding:"9px 15px",borderRadius:14,
+            border:`1.5px solid ${isCustomized?C.acc:C.bord2}`,
+            background:isCustomized?`linear-gradient(135deg,${C.aLo2},${C.bLo})`:`rgba(255,255,255,.04)`,
             color:isCustomized?C.acc:C.mid,
-            fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12,flexShrink:0,marginLeft:12,
+            fontWeight:800,cursor:"pointer",fontFamily:ff,fontSize:12,flexShrink:0,
+            boxShadow:isCustomized?`0 0 12px ${C.acc}44`:"none",
+            transition:"all .2s",
           }}>
             {isCustomized?t("personalizzaOn",lang):t("personalizza",lang)}
           </button>
         </div>
         {!isCustomized&&planDay&&(
-          <div style={{fontSize:12,color:C.mid,marginTop:4}}>
-            📅 {lang==="en"?`${dayName}'s plan from your weekly schedule`:`Piano di ${dayName} dal programma settimanale`}
+          <div style={{fontSize:11,color:C.mid,marginTop:8,display:"flex",alignItems:"center",gap:5}}>
+            <span style={{fontSize:13}}>📅</span>
+            <span>{lang==="en"?`${dayName}'s plan`:`Piano di ${dayName}`}</span>
           </div>
         )}
         {isCustomized&&(
-          <div style={{fontSize:12,color:C.acc,marginTop:4}}>
+          <div style={{fontSize:11,color:C.acc,marginTop:8,fontWeight:600}}>
             {lang==="en"?"Tap a meal to customize it":"Tocca un pasto per personalizzarlo"}
           </div>
         )}
       </div>
-      <div style={{...cS,display:"flex",alignItems:"center",gap:20,marginBottom:20}}>
-        <MacroRing cal={planTot.cal} target={effectiveTargets.calories}/>
-        <div style={{flex:1}}>
-          {[[t("goal",lang),`${effectiveTargets.calories} kcal`,C.txt],[isCustomized?t("eaten",lang):(lang==="en"?"Planned":"Pianificate"),`${rnd(planTot.cal)} kcal`,C.acc],[isCustomized?(t("remaining",lang)):(lang==="en"?"Difference":"Differenza"),`${Math.max(0,effectiveTargets.calories-rnd(planTot.cal))} kcal`,effectiveTargets.calories-planTot.cal<0?C.red:C.blu]].map(([l,v,c])=>(
-            <div key={l} style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontSize:12,color:C.mid}}>{l}</span>
-              <span style={{fontSize:13,fontWeight:700,color:c}}>{v}</span>
-            </div>
-          ))}
+
+      {/* CALORIE HERO CARD */}
+      <div style={{
+        background:`linear-gradient(145deg, #152433 0%, #0C1A26 100%)`,
+        borderRadius:24, border:`1px solid ${C.bord}`,
+        padding:"22px 20px", marginBottom:14,
+        boxShadow:`0 8px 32px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03) inset`,
+        position:"relative",overflow:"hidden",
+      }}>
+        <div style={{position:"absolute",top:-40,right:-40,width:160,height:160,borderRadius:"50%",background:`radial-gradient(circle, ${C.acc}10 0%, transparent 65%)`,pointerEvents:"none"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:20}}>
+          <MacroRing cal={planTot.cal} target={effectiveTargets.calories}/>
+          <div style={{flex:1}}>
+            {[
+              [t("goal",lang),`${effectiveTargets.calories}`,C.mid,"kcal"],
+              [isCustomized?t("eaten",lang):(lang==="en"?"Planned":"Pianificate"),`${rnd(planTot.cal)}`,C.acc,"kcal"],
+              [isCustomized?(t("remaining",lang)):(lang==="en"?"Difference":"Differenza"),`${Math.max(0,effectiveTargets.calories-rnd(planTot.cal))}`,effectiveTargets.calories-planTot.cal<0?C.red:C.blu,"kcal"],
+            ].map(([l,v,c,unit])=>(
+              <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,paddingBottom:10,borderBottom:`1px solid rgba(255,255,255,.04)`}}>
+                <span style={{fontSize:12,color:C.mid,fontWeight:600}}>{l}</span>
+                <div style={{display:"flex",alignItems:"baseline",gap:3}}>
+                  <span style={{fontSize:16,fontWeight:900,color:c}}>{v}</span>
+                  <span style={{fontSize:10,color:C.mid}}>{unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <div style={{...cS,marginBottom:24}}>
-        <div style={{fontSize:11,fontWeight:700,color:C.mid,letterSpacing:1,textTransform:"uppercase",marginBottom:16}}>{t("daily_macros",lang)}</div>
+
+      {/* MACRO BARS CARD */}
+      <div style={{
+        background:`linear-gradient(145deg, #152433 0%, #0C1A26 100%)`,
+        borderRadius:24, border:`1px solid ${C.bord}`,
+        padding:"18px 20px", marginBottom:20,
+        boxShadow:"0 4px 24px rgba(0,0,0,.35)",
+      }}>
+        <div style={{fontSize:11,fontWeight:800,color:C.mid,letterSpacing:1.2,textTransform:"uppercase",marginBottom:18}}>{t("daily_macros",lang)}</div>
         <MacroBar label={t("protein",lang)} val={rnd(planTot.p)} target={effectiveTargets.protein} color={C.acc}/>
         <MacroBar label={t("carbs",lang)} val={rnd(planTot.c)} target={effectiveTargets.carbs} color={C.blu}/>
         <MacroBar label={t("fat",lang)} val={rnd(planTot.f)} target={effectiveTargets.fat} color={C.ora}/>
       </div>
-      <div style={{fontSize:17,fontWeight:800,marginBottom:12}}>{t("meals",lang,{n:mealList.length})}</div>
+
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div style={{fontSize:17,fontWeight:900,letterSpacing:-0.3}}>{t("meals",lang,{n:mealList.length})}</div>
+        <div style={{fontSize:11,color:C.mid,fontWeight:600}}>{lang==="en"?"tap to edit":"tocca per modificare"}</div>
+      </div>
+
       {/* FAB Quick Actions */}
       {fabOpen&&(
-        <div onClick={()=>setFabOpen(false)} onTouchStart={()=>setFabOpen(false)} style={{position:"fixed",inset:0,zIndex:60,background:"rgba(0,0,0,.5)",backdropFilter:"blur(2px)"}}/>
+        <div onClick={()=>setFabOpen(false)} onTouchStart={()=>setFabOpen(false)} style={{position:"fixed",inset:0,zIndex:60,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}}/>
       )}
       {fabOpen&&(
-        <div style={{position:"fixed",bottom:155,right:16,zIndex:61,display:"flex",flexDirection:"column",gap:10,alignItems:"flex-end"}}>
+        <div style={{position:"fixed",bottom:160,right:16,zIndex:61,display:"flex",flexDirection:"column",gap:10,alignItems:"flex-end"}}>
           {[
             [()=>{setFabOpen(false);onOpenPiano&&onOpenPiano();},"📅",lang==="en"?"Weekly Plan":"Piano settimanale",C.blu],
             [()=>{setFabOpen(false);onOpenImport&&onOpenImport();},"📥",lang==="en"?"Import Diet PDF":"Importa dieta PDF",C.yel],
             [()=>{setFabOpen(false);onOpenDiary&&onOpenDiary();},"📓",lang==="en"?"Food Diary":"Diario alimentare",C.ora],
           ].map(([fn,ic,lbl,col])=>(
-            <button key={lbl} onClick={fn} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",background:C.card,border:`1.5px solid ${col}55`,borderRadius:16,color:C.txt,fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:ff,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,.4)"}}>
-              <span style={{fontSize:20}}>{ic}</span>
+            <button key={lbl} onClick={fn} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 18px",background:`linear-gradient(135deg,${C.card},${C.surf})`,border:`1.5px solid ${col}44`,borderRadius:18,color:C.txt,fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:ff,whiteSpace:"nowrap",boxShadow:`0 6px 24px rgba(0,0,0,.5), 0 0 0 1px ${col}22`}}>
+              <span style={{fontSize:22,width:28,textAlign:"center"}}>{ic}</span>
               <span>{lbl}</span>
             </button>
           ))}
         </div>
       )}
-      <button onClick={()=>setFabOpen(o=>!o)} style={{position:"fixed",bottom:90,right:16,zIndex:62,width:52,height:52,borderRadius:16,background:fabOpen?C.mid:C.acc,border:"none",color:"#0D1117",fontSize:26,fontWeight:900,cursor:"pointer",boxShadow:"0 4px 20px rgba(0,0,0,.4)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:ff,transition:"background .2s,transform .2s",transform:fabOpen?"rotate(45deg)":"rotate(0deg)"}}>+</button>
+      <button onClick={()=>setFabOpen(o=>!o)} style={{
+        position:"fixed",bottom:94,right:16,zIndex:62,
+        width:54,height:54,borderRadius:18,
+        background:fabOpen?`${C.mid}`:` linear-gradient(135deg,${C.acc},#0EC060)`,
+        border:"none",color:"#07100D",fontSize:28,fontWeight:900,
+        cursor:"pointer",boxShadow:fabOpen?"0 4px 16px rgba(0,0,0,.4)":`0 6px 24px ${C.acc}66`,
+        display:"flex",alignItems:"center",justifyContent:"center",fontFamily:ff,
+        transition:"all .2s cubic-bezier(.4,0,.2,1)",
+        transform:fabOpen?"rotate(45deg) scale(.95)":"rotate(0deg) scale(1)",
+      }}>+</button>
 
-      {mealList.map((meal)=>{
+      {mealList.map((meal,mIdx)=>{
         const {name,icon,time}=meal;
         const items=displayMeals[name]||[];
         const tot2=totals(items);
         const cnt=items.length;
         const displayName=_lang==="en"&&meal.nameEn?meal.nameEn:name;
-        // In modalità piano (non personalizzato): mostra i cibi del piano
-        // In modalità personalizza: tap apre MealDetailScreen
+        const mCol=C.mCol(name);
+        const isConfirmed=confirmedMeals&&confirmedMeals[name];
+        const isLocked=lockedMeals&&lockedMeals[name];
         return (
-          <div key={name} onClick={()=>onMealClick(name)}
-            style={{...cS,cursor:"pointer",transition:"background .15s"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:cnt>0&&!isCustomized?10:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:14}}>
-                <div style={{width:46,height:46,background:C.surf,borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{icon}</div>
+          <div key={name} onClick={()=>!isLocked&&onMealClick(name)}
+            style={{
+              background:`linear-gradient(145deg, ${C.card} 0%, ${C.surf} 100%)`,
+              borderRadius:22,
+              border:`1px solid ${C.bord}`,
+              borderLeft:`3px solid ${isLocked?C.acc:mCol}`,
+              padding:"16px 16px 16px 18px",
+              marginBottom:12,
+              cursor:isLocked?"default":"pointer",
+              opacity:isLocked?0.9:1,
+              boxShadow:isLocked?`0 4px 20px rgba(0,0,0,.3), 0 0 0 1px ${C.acc}22`:`0 4px 20px rgba(0,0,0,.3)`,
+              animation:`cardIn .4s ${mIdx*60}ms both ease-out`,
+              transition:"box-shadow .2s, border-color .2s",
+            }}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:cnt>0&&!isCustomized?12:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:13}}>
+                <div style={{
+                  width:48,height:48,
+                  background:`${mCol}18`,
+                  borderRadius:16,
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:24,border:`1.5px solid ${mCol}30`,flexShrink:0,
+                  boxShadow:`0 4px 12px ${mCol}22`,
+                }}>{icon}</div>
                 <div>
-                  <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{displayName}</div>
-                  <div style={{color:C.mid,fontSize:12}}>{cnt>0?`${cnt} aliment${cnt===1?"o":"i"}`:time}</div>
+                  <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3,marginBottom:3}}>{displayName}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{fontSize:11,color:C.mid,fontWeight:500}}>{cnt>0?`${cnt} ${lang==="en"?`item${cnt===1?"":"s"}`:`aliment${cnt===1?"o":"i"}`}`:time}</div>
+                    {isLocked&&<div style={{fontSize:10,color:C.acc,fontWeight:800,background:`${C.acc}18`,border:`1px solid ${C.acc}44`,borderRadius:6,padding:"1px 7px"}}>🔒 OK</div>}
+            {isConfirmed&&!isLocked&&<div style={{fontSize:10,color:C.acc,fontWeight:800,background:`${C.acc}18`,border:`1px solid ${C.acc}44`,borderRadius:6,padding:"1px 7px"}}>✓ OK</div>}
+                  </div>
                 </div>
               </div>
-              <div style={{textAlign:"right",display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={e=>{e.stopPropagation();onPhotoMeal&&onPhotoMeal(name);}} style={{width:34,height:34,borderRadius:10,background:C.bLo,border:`1px solid ${C.blu}33`,color:C.blu,fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:ff}}>📷</button>
-                <div>
-                  <div style={{fontWeight:800,color:cnt>0?C.acc:"#1A2B3A",fontSize:17}}>{cnt>0?rnd(tot2.cal):"—"}</div>
-                  {cnt>0&&<div style={{color:C.mid,fontSize:11,marginTop:2}}>P:{rnd(tot2.p)} C:{rnd(tot2.c)} G:{rnd(tot2.f)}</div>}
-                  {confirmedMeals&&confirmedMeals[name]&&<div style={{fontSize:10,color:C.acc,fontWeight:800,marginTop:3,background:"#00D56318",border:`1px solid ${C.acc}44`,borderRadius:6,padding:"1px 6px"}}>✓ OK</div>}
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {!isLocked&&<button onClick={e=>{e.stopPropagation();onPhotoMeal&&onPhotoMeal(name);}} style={{width:36,height:36,borderRadius:11,background:C.bLo,border:`1px solid ${C.blu}33`,color:C.blu,fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:ff}}>📷</button>}
+                <div style={{textAlign:"right",minWidth:60}}>
+                  <div style={{fontWeight:900,color:cnt>0?mCol:C.mid,fontSize:22,letterSpacing:-0.8,lineHeight:1}}>{cnt>0?rnd(tot2.cal):"—"}</div>
+                  {cnt>0?<div style={{color:C.mid,fontSize:10,marginTop:3,fontWeight:600}}>P:{rnd(tot2.p)} C:{rnd(tot2.c)} G:{rnd(tot2.f)}</div>:<div style={{fontSize:10,color:C.mid,marginTop:3}}>kcal</div>}
                 </div>
               </div>
             </div>
-            {/* In modalità piano mostra la lista cibi inline */}
             {cnt>0&&(
-              <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.dim}`}}>
+              <div style={{paddingTop:12,borderTop:`1px solid rgba(255,255,255,.05)`}}>
                 {items.slice(0,4).map((item,i)=>{
                   const div2=item.food.unit==="pz"?1:100;
                   const x2=item.quantity/div2;
                   return (
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<Math.min(3,items.length-1)?5:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontSize:14}}>{item.food.emoji}</span>
-                        <span style={{fontSize:12,color:C.mid}}>{item.food.name}</span>
-                        <span style={{fontSize:10,color:C.txt,background:C.dim,padding:"1px 6px",borderRadius:6,border:`1px solid ${C.bord}`}}>{item.quantity}{item.food.unit||"g"}</span>
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<Math.min(3,items.length-1)?8:0,padding:"3px 0"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                        <span style={{fontSize:15,flexShrink:0}}>{item.food.emoji}</span>
+                        <span style={{fontSize:12,color:C.mid,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFoodName(item.food)}</span>
+                        <span style={{fontSize:10,color:C.txt,background:"rgba(255,255,255,.07)",padding:"2px 7px",borderRadius:7,flexShrink:0,fontWeight:600}}>{item.quantity}{item.food.unit||"g"}</span>
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontSize:11,color:C.acc,fontWeight:700}}>{rnd(item.food.cal*x2)} kcal</span>
-                        <button
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:8}}>
+                        <span style={{fontSize:11,color:mCol,fontWeight:800}}>{rnd(item.food.cal*x2)}</span>
+                        {!isLocked&&<button
                           onClick={e=>{e.stopPropagation();setSwapModal({mealName:name,itemIndex:i,item});}}
-                          style={{width:24,height:24,borderRadius:7,background:C.surf,border:`1px solid ${C.bord2}`,color:C.mid,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:ff,flexShrink:0}}
-                          title={lang==="en"?"Swap food":"Cambia alimento"}
-                        >⇄</button>
+                          style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,.06)",border:`1px solid ${C.bord2}`,color:C.mid,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:ff,flexShrink:0}}
+                        >⇄</button>}
                       </div>
                     </div>
                   );
                 })}
-                {items.length>4&&<div style={{fontSize:11,color:C.mid,marginTop:4}}>+{items.length-4} {lang==="en"?"more items":"altri alimenti"}</div>}
-                <div style={{display:"flex",gap:8,marginTop:10}}>
-                  <button
-                    onClick={e=>{e.stopPropagation();onRegenFromPantry(name);}}
-                    style={{flex:1,padding:"9px 0",background:C.surf,border:`1.5px solid ${C.acc}44`,borderRadius:11,color:C.acc,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
-                  >
-                    🫙 {lang==="en"?"Recalculate with Pantry":"Ricalcola con la Credenza"}
-                  </button>
+                {items.length>4&&<div style={{fontSize:11,color:C.mid,marginTop:6,fontWeight:600}}>+{items.length-4} {lang==="en"?"more items":"altri alimenti"}</div>}
+                <div style={{display:"flex",gap:8,marginTop:12}}>
+                  {isLocked?(
+                    <button
+                      onClick={e=>{e.stopPropagation();onUnlockMeal&&onUnlockMeal(name);}}
+                      style={{flex:1,padding:"10px 0",background:`${C.yLo}`,border:`1.5px solid ${C.yel}44`,borderRadius:13,color:C.yel,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
+                    >
+                      🔓 {lang==="en"?"Unlock":"Sblocca"}
+                    </button>
+                  ):(
+                    <button
+                      onClick={e=>{e.stopPropagation();onRegenFromPantry(name);}}
+                      style={{flex:1,padding:"10px 0",background:"rgba(255,255,255,.04)",border:`1.5px solid ${C.acc}33`,borderRadius:13,color:C.acc,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
+                    >
+                      🫙 {lang==="en"?"Pantry":"Credenza"}
+                    </button>
+                  )}
                   <button
                     onClick={e=>{e.stopPropagation();onConfirmMeal(name,tot2);}}
                     style={{
-                      flex:1,padding:"9px 0",
-                      background:confirmedMeals&&confirmedMeals[name]?"#00D56322":`${C.acc}18`,
-                      border:`1.5px solid ${confirmedMeals&&confirmedMeals[name]?C.acc:C.acc+"66"}`,
-                      borderRadius:11,
+                      flex:1,padding:"10px 0",
+                      background:isConfirmed?`linear-gradient(135deg,${C.acc}28,${C.blu}18)`:`${C.acc}15`,
+                      border:`1.5px solid ${isConfirmed?C.acc:C.acc+"44"}`,
+                      borderRadius:13,
                       color:C.acc,fontWeight:800,cursor:"pointer",fontFamily:ff,fontSize:12,
                       display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-                      transition:"all .2s",
+                      transition:"all .25s",
+                      boxShadow:isConfirmed?`0 0 12px ${C.acc}44`:"none",
                     }}
                   >
-                    {confirmedMeals&&confirmedMeals[name]?t("confirmMeal",lang):t("unconfirmMeal",lang)}
+                    {isConfirmed?"✓ "+t("confirmMeal",lang):t("unconfirmMeal",lang)}
                   </button>
                 </div>
               </div>
@@ -2685,7 +3024,7 @@ function SwapFoodModal({mealName, itemIndex, currentItem, pantry, customFoods, l
 
   // Filtra per ricerca + categoria
   const filtered=allCandidates.filter(c=>{
-    const matchSearch=c.food.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch=c.food.name.toLowerCase().includes(search.toLowerCase())||(c.food.nameEn&&c.food.nameEn.toLowerCase().includes(search.toLowerCase()));
     const matchCat=selCat==="all"||getSwapCat(c.food)===selCat;
     return matchSearch&&matchCat;
   });
@@ -2698,7 +3037,7 @@ function SwapFoodModal({mealName, itemIndex, currentItem, pantry, customFoods, l
   const allDbFoods = [...ALL_FOODS,...(customFoods||[])];
   const dbCats = Object.keys(FOODS);
   const dbFiltered = dbCat==="__custom__"?(customFoods||[])
-    : search.length>=2 ? allDbFoods.filter(f=>f.name.toLowerCase().includes(search.toLowerCase())).slice(0,40)
+    : search.length>=2 ? allDbFoods.filter(f=>f.name.toLowerCase().includes(search.toLowerCase())||(f.nameEn&&f.nameEn.toLowerCase().includes(search.toLowerCase()))).slice(0,40)
     : (FOODS[dbCat]||[]);
   const calcDbEntry=(food)=>{
     const calPer=food.cal; let newQty, incompatible=false, reason="";
@@ -2716,7 +3055,7 @@ function SwapFoodModal({mealName, itemIndex, currentItem, pantry, customFoods, l
           <div style={{width:40,height:4,borderRadius:4,background:C.bord2,margin:"0 auto 16px"}}/>
           <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>{lang==="en"?"Swap food":"Cambia alimento"}</div>
           <div style={{fontSize:12,color:C.mid,marginBottom:12}}>
-            {lang==="en"?`Replacing: ${currentItem.food.emoji} ${currentItem.food.name} · ~${Math.round(targetCal)} kcal`:`Sostituisci: ${currentItem.food.emoji} ${currentItem.food.name} · ~${Math.round(targetCal)} kcal`}
+            {lang==="en"?`Replacing: ${currentItem.food.emoji} ${getFoodName(currentItem.food)} · ~${Math.round(targetCal)} kcal`:`Sostituisci: ${currentItem.food.emoji} ${currentItem.food.name} · ~${Math.round(targetCal)} kcal`}
           </div>
           {/* Source selector */}
           <div style={{display:"flex",gap:8,marginBottom:12}}>
@@ -2753,7 +3092,7 @@ function SwapFoodModal({mealName, itemIndex, currentItem, pantry, customFoods, l
                   search.length>=2?null:
                   <button key={c} onClick={()=>setDbCat(c)}
                     style={{padding:"6px 12px",borderRadius:16,border:"none",background:dbCat===c?C.acc:C.card,color:dbCat===c?"#0D1117":C.mid,fontWeight:700,cursor:"pointer",fontSize:11,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>
-                    {c==="__custom__"?"⭐ Miei":c}
+                    {c==="__custom__"?("⭐ "+(lang==="en"?"Mine":"Miei")):getCatName(c)}
                   </button>
                 )).filter(Boolean)}
               {search.length>=2&&<span style={{fontSize:12,color:C.mid,padding:"6px 0"}}>{dbFiltered.length} risultati</span>}
@@ -2786,7 +3125,7 @@ function SwapFoodModal({mealName, itemIndex, currentItem, pantry, customFoods, l
                   <span style={{fontSize:20}}>{c.food.emoji}</span>
                   <div style={{minWidth:0}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                      <span style={{fontWeight:700,fontSize:13,color:c.isExhausted?C.mid:C.txt}}>{c.food.name}</span>
+                      <span style={{fontWeight:700,fontSize:13,color:c.isExhausted?C.mid:C.txt}}>{getFoodName(c.food)}</span>
                       {c.isExhausted&&<span style={{fontSize:9,fontWeight:800,color:C.red,background:`${C.red}20`,borderRadius:5,padding:"1px 5px"}}>ESAURITO</span>}
                       {c.isLow&&<span style={{fontSize:9,fontWeight:800,color:C.yel,background:`${C.yel}20`,borderRadius:5,padding:"1px 5px"}}>⚠ {c.pantryQty}g</span>}
                       {c.incompatible&&!c.isExhausted&&<span style={{fontSize:9,color:C.red,background:`${C.red}18`,borderRadius:5,padding:"1px 5px"}}>⚠ {c.reason}</span>}
@@ -2822,7 +3161,7 @@ function SwapFoodModal({mealName, itemIndex, currentItem, pantry, customFoods, l
                   <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
                     <span style={{fontSize:20}}>{food.emoji}</span>
                     <div style={{minWidth:0}}>
-                      <div style={{fontWeight:700,fontSize:13,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{food.name}</div>
+                      <div style={{fontWeight:700,fontSize:13,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFoodName(food)}</div>
                       <div style={{fontSize:11,color:C.mid}}>P:{food.p}g · C:{food.c}g · G:{food.f}g</div>
                     </div>
                   </div>
@@ -2865,23 +3204,23 @@ function DietLibraryScreen({weeklyPlan, savedPlans, lang, onApplyPreset, onSaveC
           <div style={{fontSize:19,fontWeight:800}}>{d.emoji} {d.name}</div>
         </div>
         <div style={{...cS,background:`linear-gradient(135deg,${d.color}18,${C.card})`,border:`1.5px solid ${d.color}44`,marginBottom:16}}>
-          <div style={{display:"inline-block",background:`${d.color}22`,border:`1px solid ${d.color}44`,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700,color:d.color,marginBottom:12}}>{d.type}</div>
-          <div style={{fontSize:28,fontWeight:900,marginBottom:4,color:C.txt}}>~{d.avgCal} <span style={{fontSize:14,fontWeight:500,color:C.mid}}>kcal/giorno</span></div>
-          <div style={{fontSize:13,color:C.mid,lineHeight:1.6,marginBottom:16}}>{d.description}</div>
+          <div style={{display:"inline-block",background:`${d.color}22`,border:`1px solid ${d.color}44`,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700,color:d.color,marginBottom:12}}>{lang==="en"?d.typeEn:d.type}</div>
+          <div style={{fontSize:28,fontWeight:900,marginBottom:4,color:C.txt}}>~{d.avgCal} <span style={{fontSize:14,fontWeight:500,color:C.mid}}>{lang==="en"?"kcal/day":"kcal/giorno"}</span></div>
+          <div style={{fontSize:13,color:C.mid,lineHeight:1.6,marginBottom:16}}>{lang==="en"?d.descriptionEn:d.description}</div>
           <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
             <MacroPill label="Prot" pct={d.macroRatio.p} color={C.acc}/>
-            <MacroPill label="Carbo" pct={d.macroRatio.c} color={C.blu}/>
-            <MacroPill label="Grassi" pct={d.macroRatio.f} color={C.ora}/>
+            <MacroPill label={lang==="en"?"Carbs":"Carbo"} pct={d.macroRatio.c} color={C.blu}/>
+            <MacroPill label={lang==="en"?"Fats":"Grassi"} pct={d.macroRatio.f} color={C.ora}/>
           </div>
         </div>
         <div style={{...cS,marginBottom:12}}>
-          <div style={{fontSize:12,fontWeight:700,color:C.mid,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Esempio piano (3 giorni su 7)</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.mid,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>{lang==="en"?"Sample plan (3 of 7 days)":"Esempio piano (3 giorni su 7)"}</div>
           {d.patterns.slice(0,3).map((pat, pi) => (
             <div key={pi} style={{marginBottom:pi<2?16:0}}>
-              <div style={{fontSize:11,fontWeight:700,color:d.color,marginBottom:6}}>Giorno {pi+1}</div>
+              <div style={{fontSize:11,fontWeight:700,color:d.color,marginBottom:6}}>{lang==="en"?"Day":"Giorno"} {pi+1}</div>
               {Object.entries(pat).slice(0,3).map(([slot, foods]) => (
                 <div key={slot} style={{display:"flex",gap:6,marginBottom:4,flexWrap:"wrap"}}>
-                  <span style={{fontSize:10,color:C.mid,minWidth:60}}>Pasto {parseInt(slot)+1}</span>
+                  <span style={{fontSize:10,color:C.mid,minWidth:60}}>{lang==="en"?"Meal":"Pasto"} {parseInt(slot)+1}</span>
                   <span style={{fontSize:11,color:C.txt}}>{foods.join(", ")}</span>
                 </div>
               ))}
@@ -2972,20 +3311,20 @@ function DietLibraryScreen({weeklyPlan, savedPlans, lang, onApplyPreset, onSaveC
               <div style={{width:48,height:48,borderRadius:14,background:`${d.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{d.emoji}</div>
               <div>
                 <div style={{fontWeight:800,fontSize:15}}>{d.name}</div>
-                <div style={{display:"inline-block",background:`${d.color}22`,border:`1px solid ${d.color}44`,borderRadius:20,padding:"2px 10px",fontSize:10,fontWeight:700,color:d.color,marginTop:4}}>{d.type}</div>
+                <div style={{display:"inline-block",background:`${d.color}22`,border:`1px solid ${d.color}44`,borderRadius:20,padding:"2px 10px",fontSize:10,fontWeight:700,color:d.color,marginTop:4}}>{lang==="en"?d.typeEn:d.type}</div>
               </div>
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontWeight:800,fontSize:17,color:d.color}}>~{d.avgCal}</div>
-              <div style={{fontSize:10,color:C.mid}}>kcal/giorno</div>
+              <div style={{fontSize:10,color:C.mid}}>{lang==="en"?"kcal/day":"kcal/giorno"}</div>
             </div>
           </div>
-          <div style={{fontSize:12,color:C.mid,lineHeight:1.5,marginBottom:10}}>{d.description}</div>
+          <div style={{fontSize:12,color:C.mid,lineHeight:1.5,marginBottom:10}}>{lang==="en"?d.descriptionEn:d.description}</div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap",borderTop:`1px solid ${C.dim}`,paddingTop:8}}>
             <MacroPill label="Prot" pct={d.macroRatio.p} color={C.acc}/>
-            <MacroPill label="Carbo" pct={d.macroRatio.c} color={C.blu}/>
-            <MacroPill label="Grassi" pct={d.macroRatio.f} color={C.ora}/>
-            <span style={{marginLeft:"auto",fontSize:11,color:d.color,fontWeight:700}}>Dettagli ›</span>
+            <MacroPill label={lang==="en"?"Carbs":"Carbo"} pct={d.macroRatio.c} color={C.blu}/>
+            <MacroPill label={lang==="en"?"Fats":"Grassi"} pct={d.macroRatio.f} color={C.ora}/>
+            <span style={{marginLeft:"auto",fontSize:11,color:d.color,fontWeight:700}}>{lang==="en"?"Details ›":"Dettagli ›"}</span>
           </div>
         </div>
       ))}
@@ -3128,7 +3467,7 @@ function OnlineSearchScreen({onBack,onSaveToDb}) {
         {results.map((food,i)=>(
           <div key={i} style={{...cS,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{food.name}</div>
+              <div style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFoodName(food)}</div>
               {food.brand&&<div style={{fontSize:11,color:C.mid,marginTop:1}}>{food.brand}</div>}
               <div style={{fontSize:12,color:C.mid,marginTop:3,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                 <span><span style={{color:C.acc,fontWeight:700}}>{food.cal} kcal</span>{" · "}P:{food.p}g C:{food.c}g G:{food.f}g</span>
@@ -3370,8 +3709,8 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
   const searching=search.length>=2;
   // Quando si cerca: mostra locale + esterni in una lista unificata
   const allLocal=[...ALL_FOODS,...(customFoods||[])];
-  const localFiltered=allLocal.filter(f=>f.name.toLowerCase().includes(search.toLowerCase()));
-  const pantryFiltered=pantry.map(it=>it.food).filter(f=>f.name.toLowerCase().includes(search.toLowerCase()));
+  const localFiltered=allLocal.filter(f=>(_lang!=="en"||f.nameEn)&&(f.name.toLowerCase().includes(search.toLowerCase())||(f.nameEn&&f.nameEn.toLowerCase().includes(search.toLowerCase()))));
+  const pantryFiltered=pantry.map(it=>it.food).filter(f=>f.name.toLowerCase().includes(search.toLowerCase())||(f.nameEn&&f.nameEn.toLowerCase().includes(search.toLowerCase())));
   const mergedSearch=searching
     ? (() => {
         const seen=new Set();
@@ -3380,10 +3719,11 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
         });
       })()
     : null;
+  const enOnly=_lang==="en";
   const listToShow=searching?mergedSearch
     :cat==="__pantry__"?[]
     :cat==="__custom__"?(customFoods||[])
-    :(FOODS[cat]||[]);
+    :(enOnly?(FOODS[cat]||[]).filter(f=>f.nameEn):(FOODS[cat]||[]));
 
   if(showBarcode) return <BarcodeScanner onClose={()=>setShowBarcode(false)} onDetect={f=>{setShowBarcode(false);onAdd(f);if(onSaveCustomFood) onSaveCustomFood(f);}}/>;
   if(showOnline) return <OnlineSearchScreen onBack={()=>setShowOnline(false)} onSaveToDb={f=>{ if(onSaveCustomFood) onSaveCustomFood(f); else { const cf=customFoods||[]; if(!cf.find(x=>x.name===f.name)){ cf.push(f); LS.s("nc2-customfoods",cf); } } }}/>;
@@ -3412,7 +3752,7 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
         </div>
         <MealSummaryBar tot={mealTot} target={target}/>
         <div style={{position:"relative",marginBottom:10}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Scrivi il nome dell'alimento..." style={{...inp,paddingRight:40}}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={(fLang||_lang)==="en"?"Type food name...":"Scrivi il nome dell'alimento..."} style={{...inp,paddingRight:40}}/>
           {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.mid,cursor:"pointer",fontSize:16}}>✕</button>}
         </div>
         {searching?(
@@ -3422,11 +3762,11 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
           </div>
         ):(
           <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:12}}>
-            {pantry.length>0&&<button onClick={()=>setCat("__pantry__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__pantry__"?C.acc:C.surf,color:cat==="__pantry__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>🫙 Credenza</button>}
+            {pantry.length>0&&<button onClick={()=>setCat("__pantry__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__pantry__"?C.acc:C.surf,color:cat==="__pantry__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>🫙 {fLang==="en"?"Pantry":"Credenza"}</button>}
             {cats.map(c=>(
-              <button key={c} onClick={()=>setCat(c)} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat===c?C.acc:C.surf,color:cat===c?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>{c}</button>
+              <button key={c} onClick={()=>setCat(c)} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat===c?C.acc:C.surf,color:cat===c?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>{getCatName(c,fLang)}</button>
             ))}
-            {customFoods&&customFoods.length>0&&<button onClick={()=>setCat("__custom__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__custom__"?C.acc:C.surf,color:cat==="__custom__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>⭐ Miei</button>}
+            {customFoods&&customFoods.length>0&&<button onClick={()=>setCat("__custom__")} style={{padding:"8px 16px",borderRadius:18,border:"none",background:cat==="__custom__"?C.acc:C.surf,color:cat==="__custom__"?"#000":C.mid,fontWeight:700,cursor:"pointer",fontSize:12,whiteSpace:"nowrap",fontFamily:ff,flexShrink:0}}>⭐ {fLang==="en"?"Mine":"Miei"}</button>}
           </div>
         )}
       </div>
@@ -3436,7 +3776,7 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
             <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
               <span style={{fontSize:22,flexShrink:0}}>{food.emoji}</span>
               <div style={{minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{food.name}</div>
+                <div style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFoodName(food)}</div>
                 {food.brand&&<div style={{fontSize:11,color:C.mid,marginTop:1}}>{food.brand}</div>}
                 <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3,flexWrap:"wrap"}}>
                   <span style={{fontSize:12,color:C.mid}}>P:{food.p}g · C:{food.c}g · G:{food.f}g</span>
@@ -3455,8 +3795,8 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
             <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
               <span style={{fontSize:22}}>{it.food.emoji}</span>
               <div>
-                <div style={{fontWeight:700,fontSize:14}}>{it.food.name}</div>
-                <div style={{fontSize:12,color:C.mid}}>Disponibile: {it.qty}{it.unit||"g"}</div>
+                <div style={{fontWeight:700,fontSize:14}}>{getFoodName(it.food)}</div>
+                <div style={{fontSize:12,color:C.mid}}>{(fLang||_lang)==="en"?"Available":"Disponibile"}: {it.qty}{it.unit||"g"}</div>
               </div>
             </div>
             <div style={{color:C.acc,fontWeight:800,fontSize:14}}>{it.food.cal}<div style={{fontSize:10,color:C.mid,fontWeight:400}}>kcal</div></div>
@@ -3504,10 +3844,10 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
         r.onerror=()=>rej(new Error("Read failed"));
         r.readAsDataURL(file);
       });
-      const response=await fetch("/api/analyze-photo",{
+      const response=await fetch(`${API_BASE}/api/analyze-photo`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({imageBase64:base64,imageType})
+        body:JSON.stringify({imageBase64:base64,imageType,lang})
       });
       if(!response.ok){
         const errData=await response.json().catch(()=>({}));
@@ -3569,7 +3909,7 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
             <div style={{fontSize:52,marginBottom:16}}>📸</div>
             <div style={{fontWeight:700,fontSize:16,marginBottom:8}}>{lang==="en"?"Take a photo of your meal":"Scatta una foto del tuo pasto"}</div>
             <div style={{fontSize:13,color:C.mid,marginBottom:28,lineHeight:1.6}}>
-              {lang==="en"?"Claude AI identifies foods and estimates quantities. Review and edit before confirming.":"Claude IA identifica gli alimenti e stima le quantità. Verifica e modifica prima di confermare."}
+              {lang==="en"?"AI identifies foods and estimates quantities. Review and edit before confirming.":"L'AI identifica gli alimenti e stima le quantità. Verifica e modifica prima di confermare."}
             </div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} style={{display:"none"}} id="nc2-photo-cam"/>
             <label htmlFor="nc2-photo-cam" style={{...bP,display:"inline-block",cursor:"pointer",width:"auto",padding:"14px 28px",marginBottom:12}}>
@@ -3591,7 +3931,7 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
             {capturedImage&&<img src={capturedImage} style={{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:12,marginBottom:20}} alt=""/>}
             <Spin size={44}/>
             <div style={{fontWeight:700,fontSize:16,marginTop:20,marginBottom:8}}>{lang==="en"?"Analysing meal...":"Analisi pasto in corso..."}</div>
-            <div style={{fontSize:13,color:C.mid,lineHeight:1.6}}>{lang==="en"?"Claude AI is identifying foods and estimating portions.":"Claude IA sta identificando gli alimenti e stimando le porzioni."}</div>
+            <div style={{fontSize:13,color:C.mid,lineHeight:1.6}}>{lang==="en"?"AI is identifying foods and estimating portions.":"L'AI sta identificando gli alimenti e stimando le porzioni."}</div>
           </div>
         )}
 
@@ -3633,7 +3973,7 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
                     <div style={{display:"flex",alignItems:"center",gap:10}}>
                       <span style={{fontSize:22}}>{item.food.emoji}</span>
                       <div>
-                        <div style={{fontWeight:700,fontSize:14}}>{item.food.name}</div>
+                        <div style={{fontWeight:700,fontSize:14}}>{getFoodName(item.food)}</div>
                         <div style={{color:C.acc,fontSize:13,fontWeight:700}}>{rnd(item.food.cal*x)} kcal</div>
                       </div>
                     </div>
@@ -3671,18 +4011,27 @@ function PhotoMealScreen({mealName,mealData,lang,onBack,onConfirm}) {
   );
 }
 
-function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods,favMeals,lang,onBack,onAdd,onRemove,onQty,onUnit,onGenerate,onGenerateDB,onClear,onSaveFav,onApplyFav,onDeleteFav,onRecalc,onAddItems,isConfirmed,onUnconfirm,onSaveCustomFood}) {
+function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods,favMeals,lang,onBack,onAdd,onRemove,onQty,onUnit,onGenerate,onGenerateDB,onClear,onSaveFav,onApplyFav,onDeleteFav,onRecalc,onAddItems,isConfirmed,isLocked,onUnconfirm,onUnlock,onSaveCustomFood,onSwap}) {
   const [showSel,setShowSel]=useState(false);
   const [showPhoto,setShowPhoto]=useState(false);
-  const [isLocked,setIsLocked]=useState(!!isConfirmed);
-  // Sync lock state when isConfirmed changes (e.g. toggled from TodayScreen)
-  const prevConfirmed = useRef(isConfirmed);
-  if(prevConfirmed.current!==isConfirmed){ prevConfirmed.current=isConfirmed; if(isConfirmed&&!isLocked) setIsLocked(true); }
+  const [swapModal,setSwapModal]=useState(null);
   if(showSel) return <FoodSelectorScreen mealTot={tot} target={target} pantry={pantry} customFoods={customFoods||[]} lang={lang} onBack={()=>setShowSel(false)} onAdd={f=>{onAdd(f);setShowSel(false);}} onSaveCustomFood={onSaveCustomFood}/>;
   if(showPhoto) return <PhotoMealScreen mealName={mealName} mealData={mealData} lang={lang} onBack={()=>setShowPhoto(false)} onConfirm={photoItems=>{onAddItems(photoItems);setShowPhoto(false);}}/>;
   return (
     <div style={{...ss,overflowY:"auto"}}>
       <style>{FONTS}</style>
+      {swapModal&&(
+        <SwapFoodModal
+          mealName={mealName}
+          itemIndex={swapModal.idx}
+          currentItem={swapModal.item}
+          pantry={pantry||[]}
+          customFoods={customFoods||[]}
+          lang={lang}
+          onClose={()=>setSwapModal(null)}
+          onSwap={(newFood,newQty)=>{ onSwap&&onSwap(swapModal.idx,newFood,newQty); setSwapModal(null); }}
+        />
+      )}
       <div style={{padding:"52px 20px 40px"}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
           <BackBtn onClick={onBack}/>
@@ -3690,11 +4039,15 @@ function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods
             <div style={{fontSize:21,fontWeight:800}}>{mealData?.icon} {_lang==="en"&&mealData?.nameEn?mealData.nameEn:mealName}</div>
             <div style={{fontSize:12,color:C.mid}}>{mealData?.time}</div>
           </div>
-          {isConfirmed&&(
-            <button onClick={()=>setIsLocked(l=>!l)} style={{background:isLocked?"#FEF3C7":"#ECFDF5",border:`1px solid ${isLocked?"#FCD34D33":"#6EE7B733"}`,borderRadius:10,padding:"8px 12px",color:isLocked?"#92400E":C.acc,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:ff,marginRight:4}} title={isLocked?(lang==="en"?"Unlock to edit":"Sblocca per modificare"):(lang==="en"?"Lock meal":"Blocca pasto")}>
-              {isLocked?"🔒":"🔓"}
+          {isLocked?(
+            <button onClick={onUnlock} style={{background:"#FEF3C7",border:"1px solid #FCD34D33",borderRadius:10,padding:"8px 12px",color:"#92400E",cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:ff,marginRight:4}} title={lang==="en"?"Unlock to edit":"Sblocca per modificare"}>
+              🔒
             </button>
-          )}
+          ):isConfirmed?(
+            <button style={{background:"#ECFDF5",border:"1px solid #6EE7B733",borderRadius:10,padding:"8px 12px",color:C.acc,cursor:"default",fontSize:14,fontWeight:600,fontFamily:ff,marginRight:4}}>
+              🔓
+            </button>
+          ):null}
           {items.length>0&&!isLocked&&<button onClick={onClear} style={{background:"#FFF3E0",border:"1px solid #FBBF8833",borderRadius:10,padding:"8px 12px",color:C.ora,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:ff}}>🗑️ Reset</button>}
         </div>
         <MealSummaryBar tot={tot} target={target}/>
@@ -3738,7 +4091,7 @@ function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:22}}>{item.food.emoji}</span>
                   <div>
-                    <div style={{fontWeight:700,fontSize:14}}>{item.food.name}</div>
+                    <div style={{fontWeight:700,fontSize:14}}>{getFoodName(item.food)}</div>
                     {item.food.brand&&<div style={{fontSize:11,color:C.mid}}>{item.food.brand}</div>}
                     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                       <span style={{color:C.acc,fontSize:13,fontWeight:700}}>{rnd(item.food.cal*x)} kcal</span>
@@ -3746,7 +4099,10 @@ function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods
                     </div>
                   </div>
                 </div>
-                {!isLocked&&<button onClick={()=>onRemove(idx)} style={{background:C.rLo,border:"none",borderRadius:9,padding:"6px 10px",color:C.red,cursor:"pointer",fontSize:14,fontFamily:ff}}>✕</button>}
+                {!isLocked&&<div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>setSwapModal({idx,item})} style={{background:"rgba(255,255,255,.06)",border:`1px solid ${C.bord2}`,borderRadius:9,padding:"6px 10px",color:C.mid,cursor:"pointer",fontSize:14,fontFamily:ff}}>⇄</button>
+                  <button onClick={()=>onRemove(idx)} style={{background:C.rLo,border:"none",borderRadius:9,padding:"6px 10px",color:C.red,cursor:"pointer",fontSize:14,fontFamily:ff}}>✕</button>
+                </div>}
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                 {["g","ml","pz"].map(u=>(
@@ -3797,28 +4153,66 @@ function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods
   );
 }
 
-// CREDENZA
-// Categorizza un alimento per macro — usata da Credenza e PlanMealDetailScreen
-function getCategoryGlobal(food) {
-  const cal=food.cal||1, p=food.p||0, c=food.c||0, f=food.f||0;
-  if(cal<60 && p<5) return "V";
-  if(cal<80 && p<2 && c>5) return "V";
-  const n=(food.name||"").toLowerCase();
-  const vegKw=["broccol","spinac","zucchi","pomodor","insalat","lattuga","peperone","carota","asparago","asparag","funghi","cavolfiore","cavol","cetriolo","melanzana","sedano","finocchio","radicchio","mela","pera","fragol","mirtill","banana","arancia","uva","albicocca","pesca","mandarino","limone","kiwi","ananas","frutto","frutta","verdura","anguria","melone","ciliegia","lampone","melograno","fico","prugna","dattero"];
-  if(vegKw.some(kw=>n.includes(kw))) return "V";
-  const pPct=(p*4)/cal, cPct=(c*4)/cal, fPct=(f*9)/cal;
-  if(p>=10 || pPct>=0.30) return "P";
-  if(cPct>=0.40) return "C";
-  if(fPct>=0.40) return "G";
+// CREDENZA — classificazione alimenti unificata (8 categorie, keyword-first)
+function getFoodCat(food) {
+  const n = (food.name||"").toLowerCase();
+  // Verdure
+  if(["broccol","spinac","zucchi","pomodor","insalat","lattuga","peperone","carota","asparag",
+      "funghi","cavolfiore","cavol","cetriolo","melanzana","sedano","finocchio","radicchio",
+      "rucola","bietola","fagiolini","cipolla","aglio","porro","carc","verdur","crescione",
+      "barbabietola","germogl","mais dolce","carciofo","piselli"].some(k=>n.includes(k)))
+    return "V";
+  // Frutta
+  if(["mela","pera","banana","arancia","fragol","kiwi","ananas","uva","melone","anguria",
+      "albicocca","mango","mirtill","lamponi","more","ciliegi","pesca","prugna","fico",
+      "cachi","dattero","melograno","papaya","lime","limone","mandarino","clementina",
+      "pompelmo","frutto della passione"].some(k=>n.includes(k)))
+    return "FR";
+  // Latticini
+  if(["latte","yogurt","ricotta","formaggio","mozzarella","parmigiano","grana","pecorino",
+      "burrata","mascarpone","fiocchi di latte","cottage","skyr","quark","kefir",
+      "bevanda a base di"].some(k=>n.includes(k)))
+    return "L";
+  // Uova
+  if(["uov","album"].some(k=>n.includes(k))) return "U";
+  // Cereali e amidi
+  if(["pasta","riso","farro","orzo","quinoa","bulgur","couscous","cous cous","polenta","grano",
+      "pane","galletta","crackers","frisella","grissini","patata","patate","avena","fiocchi d'avena",
+      "fiocchi di avena","muesli","granola","tortilla","amaranto","kamut","piadina","focaccia",
+      "gnocchi","polpett"].some(k=>n.includes(k)))
+    return "C";
+  // Proteine vegetali
+  if(["lenticch","ceci","fagioli","soia","tempeh","tofu","seitan"].some(k=>n.includes(k)))
+    return "PV";
+  // Grassi & frutta secca
+  if(["olio","mandorle","noci","nocciole","pistacchi","semi di","avocado","burro di arachidi",
+      "tahini","burro di","cocco","frutta secca"].some(k=>n.includes(k)))
+    return "G";
+  // Supplementi
+  if(["whey","caseina","proteine in polvere","creatina","integratore"].some(k=>n.includes(k)))
+    return "S";
+  // Fallback macro
+  const cal=food.cal||1, pPct=(food.p*4)/cal;
+  if(pPct>=0.30 || food.p>=18) return "P";
+  if((food.c*4)/cal>=0.50) return "C";
+  if((food.f*9)/cal>=0.40) return "G";
+  if(food.cal<55) return "V";
   return "A";
 }
+// Compatibilità backward per codice esistente
+const getCategoryGlobal = getFoodCat;
 
 const PANTRY_CATS=[
-  {key:"P", labelIt:"Proteine",       labelEn:"Proteins",          color:"#00D563", emoji:"🥩"},
-  {key:"C", labelIt:"Carboidrati",    labelEn:"Carbohydrates",     color:"#58A6FF", emoji:"🌾"},
-  {key:"G", labelIt:"Grassi",         labelEn:"Fats",              color:"#FFA657", emoji:"🫒"},
-  {key:"V", labelIt:"Verdure & Frutta",labelEn:"Veg & Fruit",      color:"#4CAF50", emoji:"🥦"},
-  {key:"A", labelIt:"Altro",          labelEn:"Other",             color:"#8B949E", emoji:"🍽️"},
+  {key:"P",  labelIt:"Carni & Pesce",        labelEn:"Meat & Fish",       color:C.acc,      emoji:"🥩"},
+  {key:"PV", labelIt:"Proteine Vegetali",    labelEn:"Plant Proteins",    color:"#4ADE80",  emoji:"🫘"},
+  {key:"U",  labelIt:"Uova",                 labelEn:"Eggs",              color:"#FDE68A",  emoji:"🥚"},
+  {key:"L",  labelIt:"Latticini",            labelEn:"Dairy",             color:"#A78BFA",  emoji:"🧀"},
+  {key:"C",  labelIt:"Cereali & Amidi",      labelEn:"Grains & Starches", color:C.blu,      emoji:"🌾"},
+  {key:"V",  labelIt:"Verdure",              labelEn:"Vegetables",        color:"#4CAF50",  emoji:"🥦"},
+  {key:"FR", labelIt:"Frutta",               labelEn:"Fruit",             color:"#F97316",  emoji:"🍎"},
+  {key:"G",  labelIt:"Grassi & Frutta Secca",labelEn:"Fats & Nuts",      color:C.ora,      emoji:"🫒"},
+  {key:"S",  labelIt:"Supplementi",          labelEn:"Supplements",       color:C.pur,      emoji:"💊"},
+  {key:"A",  labelIt:"Altro",                labelEn:"Other",             color:C.mid,      emoji:"🍽️"},
 ];
 
 // Deduplicazione + sort + raggruppamento per credenza/manual picker
@@ -3845,31 +4239,7 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // Categorizza un alimento: prima per nome (più affidabile), poi per macro
-  const getCategory=(food)=>{
-    const n=(food.name||"").toLowerCase();
-    // Verdure
-    const isVeg=["broccoli","spinaci","zucchine","zucchina","pomodor","insalata","lattuga",
-      "cavolo","peperone","peperoni","melanzana","cetriolo","cetrioli","cavolfiore","carciofo",
-      "carota","carote","bietola","sedano","finocchio","asparagi","verdur","rucola","radicchio",
-      "funghi","champignon","porcino","fagiolini","piselli","cipolla","aglio","porro","basilico",
-      "prezzemolo","rosmarino","salvia","menta","timo","erba cipollina","crescione","rucola",
-      "barbabietola","edamame","germogli","mais dolce","crauti"].some(k=>n.includes(k));
-    // Frutta
-    const isFruit=["mela","pera","banana","arancia","fragol","kiwi","ananas","uva","melone",
-      "anguria","albicocca","mango","mirtill","lamponi","more","ciliegie","pesca","prugna",
-      "fico","cachi","dattero","melograno","papaya","maracuja","lime","limone"].some(k=>n.includes(k));
-    if(isVeg||isFruit) return "V";
-    // Per gli altri usa i macro
-    const cal=food.cal||1;
-    const pPct=(food.p*4)/cal;
-    const cPct=(food.c*4)/cal;
-    const fPct=(food.f*9)/cal;
-    if(pPct>=0.28) return "P";
-    if(fPct>=0.40) return "G";
-    if(cPct>=0.40) return "C";
-    return "A";
-  };
+  const getCategory = getFoodCat;
 
   const addItem=food=>{
     const existing=pantry.find(it=>it.food.name===food.name);
@@ -3921,15 +4291,7 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
   const lowCount=dedupedPantry.filter(it=>it.qty>0&&it.qty<100).length;
   const exhaustedCount=dedupedPantry.filter(it=>it.qty<=0).length;
 
-  const CATS=[
-    {key:"P", labelIt:"Proteine",        labelEn:"Proteins",       color:C.acc,  emoji:"🥩"},
-    {key:"C", labelIt:"Carboidrati",     labelEn:"Carbohydrates",  color:C.blu,  emoji:"🌾"},
-    {key:"G", labelIt:"Grassi",          labelEn:"Fats",           color:C.ora,  emoji:"🫒"},
-    {key:"V", labelIt:"Frutta e Verdura",labelEn:"Fruit & Veg",    color:"#4CAF50", emoji:"🥦"},
-    {key:"A", labelIt:"Altro",           labelEn:"Other",          color:C.mid,  emoji:"🍽️"},
-  ];
-
-  const grouped=CATS.map(cat=>({
+  const grouped=PANTRY_CATS.map(cat=>({
     ...cat,
     items: dedupedPantry
       .filter(it=>getCategory(it.food)===cat.key)
@@ -3938,18 +4300,36 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
 
   return (
     <div style={{padding:"52px 20px 100px",overflowY:"auto"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-        <div>
-          <div style={{fontSize:24,fontWeight:900,letterSpacing:-0.5}}>Credenza</div>
-          <div style={{fontSize:13,color:C.mid,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span>{activeCount} {lang==="en"?"available":"disponibili"}</span>
-            {lowCount>0&&<span style={{color:C.yel,fontWeight:700}}>⚠ {lowCount} {lang==="en"?"low":"in esaurimento"}</span>}
-            {exhaustedCount>0&&<span style={{color:C.red,fontWeight:700}}>✕ {exhaustedCount} {lang==="en"?"exhausted":"esauriti"}</span>}
+      {/* HEADER */}
+      <div style={{
+        background:`linear-gradient(145deg,#152433,#0C1A26)`,
+        borderRadius:22,border:`1px solid ${C.bord}`,
+        padding:"18px 20px",marginBottom:18,
+        boxShadow:"0 4px 20px rgba(0,0,0,.3)",
+      }}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+          <div>
+            <div style={{fontSize:22,fontWeight:900,letterSpacing:-0.5}}>{lang==="en"?"Pantry":"Credenza"}</div>
+            <div style={{fontSize:12,color:C.mid,marginTop:3,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <span style={{color:C.acc,fontWeight:700}}>{activeCount} {lang==="en"?"available":"disponibili"}</span>
+              {lowCount>0&&<span style={{color:C.yel,fontWeight:700}}>⚠ {lowCount} {lang==="en"?"low":"in esaurimento"}</span>}
+              {exhaustedCount>0&&<span style={{color:C.red,fontWeight:700}}>✕ {exhaustedCount} {lang==="en"?"exhausted":"esauriti"}</span>}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+            <button onClick={()=>setShowAdd(true)} style={{padding:"9px 13px",background:`${C.acc}15`,border:`1px solid ${C.acc}33`,borderRadius:12,color:C.acc,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12}}>📋 Database</button>
+            <button onClick={()=>setShowCreate(true)} style={{padding:"9px 13px",background:C.bLo,border:`1px solid ${C.blu}33`,borderRadius:12,color:C.blu,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12}}>✏️ {lang==="en"?"Create":"Crea"}</button>
+            <button onClick={()=>setShowAdd(true)} style={{padding:"9px 16px",background:`linear-gradient(135deg,${C.acc},#00C488)`,border:"none",borderRadius:12,color:"#07100D",fontWeight:900,cursor:"pointer",fontFamily:ff,fontSize:13}}>+ {lang==="en"?"Add":"Aggiungi"}</button>
           </div>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setShowCreate(true)} style={{padding:"10px 14px",background:C.bLo,border:`1px solid ${C.blu}33`,borderRadius:14,color:C.blu,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:13}}>✏️ Crea</button>
-          <button onClick={()=>setShowAdd(true)} style={{padding:"10px 18px",background:C.acc,border:"none",borderRadius:14,color:"#0D1117",fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:14}}>+ Aggiungi</button>
+        {/* Categoria pills */}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {grouped.map(cat=>(
+            <div key={cat.key} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:20,background:`${cat.color}18`,border:`1px solid ${cat.color}33`,fontSize:11,fontWeight:700,color:cat.color}}>
+              <span>{cat.emoji}</span>
+              <span>{cat.items.length}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -3985,7 +4365,7 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
                   <span style={{fontSize:22,opacity:isExhausted?0.45:1}}>{it.food.emoji}</span>
                   <div>
                     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                      <span style={{fontWeight:700,fontSize:14,color:isExhausted?C.mid:C.txt}}>{it.food.name}</span>
+                      <span style={{fontWeight:700,fontSize:14,color:isExhausted?C.mid:C.txt}}>{getFoodName(it.food)}</span>
                       {isExhausted&&<span style={{fontSize:10,fontWeight:800,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:6,padding:"1px 6px",letterSpacing:.5}}>ESAURITO</span>}
                       {isLow&&<span style={{fontSize:10,fontWeight:800,color:C.yel,background:`${C.yel}18`,border:`1px solid ${C.yel}44`,borderRadius:6,padding:"1px 6px",letterSpacing:.5}}>⚠ BASSO</span>}
                     </div>
@@ -4144,7 +4524,7 @@ function MealPlanScreen({weeklyPlan,mealList,targets,lang,onGenerate,onGenerateF
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <span style={{fontSize:18,flexShrink:0}}>{item.food.emoji}</span>
                     <div>
-                      <div style={{fontWeight:600,fontSize:13}}>{item.food.name}</div>
+                      <div style={{fontWeight:600,fontSize:13}}>{getFoodName(item.food)}</div>
                       <div style={{fontSize:11,color:C.mid}}>{item.quantity}{item.food.unit||"g"}</div>
                     </div>
                   </div>
@@ -4196,7 +4576,9 @@ function PlanMealDetailScreen({mealName,dayIdx,items,target,pantry,lang,optimize
   // Genera automaticamente da credenza usando la selezione strutturata
   const handleAutoGenerate=()=>{
     if(!pantryFoods.length){ setMode("auto"); setGeneratedItems([]); return; }
-    const foods=selectStructuredPantryFoods(mealName, pantryFoods, target);
+    const _pmKey=resolveItalianMealKey(mealName);
+    const _pmRecipes=WEEK_RECIPES[_pmKey]||WEEK_RECIPES["Pranzo"];
+    const foods=selectPantryFoodsForRecipe(mealName, pantryFoods, _pmRecipes, 0, {});
     if(!foods.length){ setMode("auto"); setGeneratedItems([]); return; }
     const qtys=optimize(foods,target);
     const raw=foods.map((food,i)=>({food,quantity:qtys[i]}));
@@ -4296,7 +4678,7 @@ function PlanMealDetailScreen({mealName,dayIdx,items,target,pantry,lang,optimize
                       <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
                         <span style={{fontSize:20,flexShrink:0}}>{item.food.emoji}</span>
                         <div style={{minWidth:0,flex:1}}>
-                          <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.food.name}</div>
+                          <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFoodName(item.food)}</div>
                           <div style={{fontSize:11,color:C.mid}}>{item.quantity}{item.food.unit||"g"} · {rnd(item.food.cal*x)} kcal</div>
                         </div>
                       </div>
@@ -4368,7 +4750,7 @@ function PlanMealDetailScreen({mealName,dayIdx,items,target,pantry,lang,optimize
                         <div style={{display:"flex",alignItems:"center",gap:10}}>
                           <span style={{fontSize:20}}>{item.food.emoji}</span>
                           <div>
-                            <div style={{fontWeight:600,fontSize:13}}>{item.food.name}</div>
+                            <div style={{fontWeight:600,fontSize:13}}>{getFoodName(item.food)}</div>
                             <div style={{fontSize:11,color:C.mid}}>{item.quantity}{item.food.unit||"g"}</div>
                           </div>
                         </div>
@@ -4427,7 +4809,7 @@ function PlanMealDetailScreen({mealName,dayIdx,items,target,pantry,lang,optimize
                         </div>
                         <span style={{fontSize:18,flexShrink:0}}>{food.emoji}</span>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{food.name}</div>
+                          <div style={{fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFoodName(food)}</div>
                           <div style={{fontSize:10,color:C.mid}}>{food.cal} kcal · P:{food.p} C:{food.c} G:{food.f}</div>
                         </div>
                       </div>
@@ -4455,7 +4837,7 @@ function PlanMealDetailScreen({mealName,dayIdx,items,target,pantry,lang,optimize
 }
 
 // PROFILE SCREEN (include progressi peso)
-function ProfileScreen({profile,setProfile,targets,user,weightLog,newWeight,setNewWeight,onLog,onCalc,onLogout,onReset,onManualMacros,onSaveExcluded,lang,onChangeLang,onShowProgress,onOpenPiano,onOpenImport,onOpenDietLibrary}) {
+function ProfileScreen({profile,setProfile,targets,user,weightLog,newWeight,setNewWeight,onLog,onCalc,onLogout,onReset,onManualMacros,onSaveExcluded,onSaveProfile,lang,onChangeLang,onShowProgress,onOpenPiano,onOpenImport,onOpenDietLibrary}) {
   const [editing,setEditing]=useState(false);
   const [editMacros,setEditMacros]=useState(false);
   const [macroForm,setMacroForm]=useState(null);
@@ -4717,49 +5099,7 @@ function ProfileScreen({profile,setProfile,targets,user,weightLog,newWeight,setN
         );
       })()}
 
-      {/* Card BIA sempre visibile */}
-      {(()=>{
-        const hasBia=['bia_fm','bia_ffm','bia_smm','bia_bmr','bia_vf','bia_smi','bia_whr'].some(k=>parseFloat(profile[k])>0);
-        const vf=parseFloat(profile.bia_vf)||0;
-        const whr=parseFloat(profile.bia_whr)||0;
-        const ffm=parseFloat(profile.bia_ffm)||0;
-        const smm=parseFloat(profile.bia_smm)||0;
-        const bmrBia=parseFloat(profile.bia_bmr)||0;
-        return (
-          <div style={{...cS,background:`${C.blu}0A`,border:`1px solid ${C.blu}33`,marginBottom:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:hasBia?12:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:18}}>🔬</span>
-                <div>
-                  <div style={{fontSize:13,fontWeight:800,color:C.blu}}>{lang==="en"?"BIA Analysis":"Analisi BIA"}</div>
-                  {!hasBia&&<div style={{fontSize:11,color:C.mid,marginTop:2}}>{lang==="en"?"No data — click Edit Profile to enter values":"Nessun dato — clicca Modifica profilo per inserire i valori"}</div>}
-                </div>
-              </div>
-              <button onClick={()=>setEditing(true)} style={{padding:"6px 14px",background:C.bLo,border:`1px solid ${C.blu}44`,borderRadius:10,color:C.blu,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12}}>
-                {hasBia?(lang==="en"?"Update":"Aggiorna"):(lang==="en"?"+ Enter":"+ Inserisci")}
-              </button>
-            </div>
-            {hasBia&&(
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {[
-                  ffm>0&&["LBM",`${ffm} kg`,C.acc],
-                  smm>0&&[lang==="en"?"Muscle":"Muscolo",`${smm} kg`,"#4CAF50"],
-                  bmrBia>0&&["BMR",`${bmrBia} kcal`,C.blu],
-                  vf>0&&[lang==="en"?"Visc.":"G.visc.",`${vf}`,vf<=9?C.acc:vf<=14?C.yel:C.red],
-                  whr>0&&["WHR",`${whr}`,whr<=0.85?C.acc:whr<=0.95?C.yel:C.red],
-                ].filter(Boolean).map(([lbl,val,col])=>(
-                  <div key={lbl} style={{padding:"6px 12px",background:col+"15",border:`1px solid ${col}33`,borderRadius:10,display:"flex",flexDirection:"column",alignItems:"center"}}>
-                    <div style={{fontSize:14,fontWeight:800,color:col}}>{val}</div>
-                    <div style={{fontSize:9,color:C.mid,marginTop:1,textTransform:"uppercase",letterSpacing:.5}}>{lbl}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      <button onClick={()=>setEditing(!editing)} style={{...bS,marginBottom:16}}>{editing?t("closeEdit",lang):t("editProfile",lang)}</button>
+      <button onClick={()=>{ if(editing&&onSaveProfile) onSaveProfile(profile); setEditing(!editing); }} style={{...bS,marginBottom:16}}>{editing?t("closeEdit",lang):t("editProfile",lang)}</button>
 
       {editing&&(
         <div style={{animation:"fadeUp .3s ease"}}>
@@ -4857,7 +5197,7 @@ function ProfileScreen({profile,setProfile,targets,user,weightLog,newWeight,setN
               );
             })()}
           </div>
-          <button onClick={()=>{onCalc();setEditing(false);}} style={bP}>{t("recalcPlan",lang)}</button>
+          <button onClick={()=>{if(onSaveProfile)onSaveProfile(profile);onCalc();setEditing(false);}} style={bP}>{t("recalcPlan",lang)}</button>
         </div>
       )}
       {/* SEZIONE ALIMENTI ESCLUSI */}
@@ -4881,7 +5221,7 @@ function ProfileScreen({profile,setProfile,targets,user,weightLog,newWeight,setN
                   if(onSaveExcluded) onSaveExcluded(pr);
                 }}
                 style={{padding:"6px 12px",borderRadius:20,border:`2px solid ${sel?C.red:C.bord}`,background:sel?C.rLo:C.surf,color:sel?C.red:C.mid,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12,display:"flex",alignItems:"center",gap:4}}>
-                <span style={{fontSize:14}}>{tag.emoji}</span>{tag.label}
+                <span style={{fontSize:14}}>{tag.emoji}</span>{lang==="en"?tag.labelEn:tag.label}
                 {sel&&<span style={{fontSize:10}}>✕</span>}
               </button>
             );
@@ -5032,7 +5372,7 @@ function DiaryScreen({lang,pantry,customFoods,onBack=null}) {
               <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
                 <span style={{fontSize:22,flexShrink:0}}>{e.food.emoji}</span>
                 <div style={{minWidth:0}}>
-                  <div style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.food.name}</div>
+                  <div style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{getFoodName(e.food)}</div>
                   <div style={{color:C.acc,fontSize:12,fontWeight:700}}>{rnd(e.food.cal*x)} kcal · P:{rnd(e.food.p*x)}g C:{rnd(e.food.c*x)}g G:{rnd(e.food.f*x)}g</div>
                 </div>
               </div>
@@ -5096,7 +5436,7 @@ function ImportDietScreen({lang,mealList,onApply,onApplyToPlan,onBack}) {
         ? mealList.map(m=>m.name).join(", ")
         : "Colazione, Pranzo, Cena";
 
-      const response=await fetch("/api/analyze-diet",{
+      const response=await fetch(`${API_BASE}/api/analyze-diet`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({base64, mealNames:mealNamesStr})
@@ -5252,7 +5592,7 @@ function ImportDietScreen({lang,mealList,onApply,onApplyToPlan,onBack}) {
           <Spin size={44}/>
           <div style={{fontWeight:700,fontSize:16,marginTop:20,marginBottom:8}}>{t("importAnalyzing",lang)}</div>
           <div style={{fontSize:13,color:C.mid,lineHeight:1.6}}>
-            {lang==="en"?"Claude AI is reading your diet plan. This takes about 10-20 seconds.":"Claude IA sta leggendo il tuo piano alimentare. Richiede circa 10-20 secondi."}
+            {lang==="en"?"AI is reading your diet plan. This takes about 10-20 seconds.":"L'AI sta leggendo il tuo piano alimentare. Richiede circa 10-20 secondi."}
           </div>
         </div>
       )}
@@ -5302,8 +5642,7 @@ function ImportDietScreen({lang,mealList,onApply,onApplyToPlan,onBack}) {
           {parsedDays.map((day,idx)=>{
             const mealKeys=Object.keys(day.meals||{});
             const dayTot=Object.values(day.meals||{}).flat().reduce((acc,f)=>{
-              const x=(f.quantity||100)/100;
-              return {cal:acc.cal+(f.cal||0)*x, p:acc.p+(f.p||0)*x};
+              return {cal:acc.cal+(f.cal||0), p:acc.p+(f.p||0)};
             },{cal:0,p:0});
             return (
               <div key={idx} style={{...cS,marginBottom:12,opacity:day.confirmed?1:0.45,transition:"opacity .2s"}}>
@@ -5848,9 +6187,6 @@ function DietProgressScreen({targets,nutritionLogs,workoutLogs=[],lang,onBack,on
 }
 
 // DiaryScreen wrapper con tasto Back
-
-
-// DiaryScreen wrapper con tasto Back
 function DiaryScreenWithBack({lang,pantry,customFoods,onBack}) {
   // Renders DiaryScreen with a back button injected before its title
   return <DiaryScreen lang={lang} pantry={pantry} customFoods={customFoods} onBack={onBack}/>;
@@ -5907,10 +6243,12 @@ export default function App() {
   const [favMeals,setFavMeals]=useState(()=>LS.g("nc2-favmeals")||[]);
   const [lang,setLangState]=useState(()=>localStorage.getItem("nc2-lang")||"it");
   const changeLang=(l)=>{ setLang(l); setLangState(l); };
+  const [langChosen,setLangChosen]=useState(()=>!!LS.g("nc2-lang-chosen"));
+  const selectLang=(l)=>{ setLang(l); setLangState(l); LS.s("nc2-lang-chosen",true); setLangChosen(true); };
   const [weightLog,setWeightLog]=useState([]);
   const [weeklyPlan,setWeeklyPlan]=useState(()=>LS.g("nc2-weeklyplan"));
   const [planSeed,setPlanSeed]=useState(()=>LS.g("nc2-planseed")||0);
-  const [isCustomized,setIsCustomized]=useState(false);
+  const [isCustomized,setIsCustomized]=useState(()=>LS.g(`nc2-customized-${localDateStr()}`)||false);
   const [tab,setTab]=useState("today");
   const [selMeal,setSelMeal]=useState(null);
   const [photoMealName,setPhotoMealName]=useState(null);
@@ -5919,6 +6257,7 @@ export default function App() {
   const [showWeightModal,setShowWeightModal]=useState(false);
   const [newWeight,setNewWeight]=useState("");
   const [confirmedMeals,setConfirmedMeals]=useState(()=>LS.g(`nc2-confirmed-${localDateStr()}`)||{});
+  const [lockedMeals,setLockedMeals]=useState(()=>LS.g(`nc2-locked-${localDateStr()}`)||{});
   const [workoutLogs,setWorkoutLogs]=useState(()=>LS.g("nc2-workouts")||[]);
   const [subScreen,setSubScreen]=useState(null); // null|"piano"|"import"|"diary"
   const [nutritionLogs,setNutritionLogs]=useState([]);
@@ -5976,10 +6315,34 @@ export default function App() {
         lastDay=newDay;
         setConfirmedMeals({});
         LS.s(`nc2-confirmed-${newDay}`,{});
+        setLockedMeals({});
+        LS.s(`nc2-locked-${newDay}`,{});
       }
     },60000);
     return ()=>clearInterval(interval);
   },[]);
+
+  // Persisti isCustomized per giorno in localStorage
+  useEffect(()=>{
+    LS.s(`nc2-customized-${today}`,isCustomized);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[isCustomized]);
+
+  // Auto-sync weeklyPlan su Supabase con debounce
+  useEffect(()=>{
+    if(!user||!weeklyPlan) return;
+    const t=setTimeout(()=>{ DB.saveWeeklyPlan(user.id,weeklyPlan,planSeed).catch(()=>{}); },1000);
+    return ()=>clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[weeklyPlan,planSeed,user]);
+
+  // Auto-sync lockedMeals su Supabase con debounce
+  useEffect(()=>{
+    if(!user||!Object.keys(lockedMeals||{}).length) return;
+    const t=setTimeout(()=>{ DB.saveLockedMeals(user.id,today,lockedMeals).catch(()=>{}); },500);
+    return ()=>clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[lockedMeals,user]);
 
   const loadLocal=()=>{
     const pr=LS.g("nc2-profile"), tg=LS.g("nc2-targets"), ml=LS.g("nc2-meallist"), ms=LS.g(`nc2-meals-${today}`), pt=LS.g("nc2-pantry"), wl=LS.g("nc2-weightlog");
@@ -5991,106 +6354,130 @@ export default function App() {
 
   const loadUser=async(u)=>{
     setUser(u);
-    try {
-      // 1. Carica profilo da Supabase
-      const sbP=await DB.loadProfile(u.id);
-      if(sbP) {
-        const pr={name:sbP.name||u.user_metadata?.name||"",gender:sbP.gender||"m",age:sbP.age||"",weight:sbP.weight||"",height:sbP.height||"",bodyFat:sbP.body_fat||"",activity:sbP.activity||1.55,goal:sbP.goal||"lose",numMeals:sbP.num_meals||3,excludedFoods:sbP.excluded_foods||[],bia_fm:sbP.bia_fm||"",bia_vf:sbP.bia_vf||"",bia_bmr:sbP.bia_bmr||"",bia_ffm:sbP.bia_ffm||"",bia_sc_fat:sbP.bia_sc_fat||"",bia_smi:sbP.bia_smi||"",bia_whr:sbP.bia_whr||"",bia_smm:sbP.bia_smm||""};
-        setProfile(pr);
-        // Salva su localStorage come cache
-        LS.s(`nc2-profile-${u.id}`,pr);
-      } else {
-        // Fallback localStorage
-        const lsPr=LS.g(`nc2-profile-${u.id}`);
-        if(lsPr) setProfile(lsPr);
-      }
-
-      // 2. Carica targets da Supabase poi localStorage
-      let tg=null, ml=null;
+    // Fast path: restore from localStorage immediately (stale-while-revalidate)
+    const _lsPr=LS.g(`nc2-profile-${u.id}`);
+    const _lsTg=LS.g(`nc2-targets-${u.id}`)||LS.g("nc2-targets");
+    const _lsMl=LS.g(`nc2-meallist-${u.id}`)||LS.g("nc2-meallist");
+    const _lsCacheHit=!!(_lsTg&&_lsMl);
+    if(_lsPr) setProfile(_lsPr);
+    if(_lsCacheHit){
+      setTargets(_lsTg); setMealList(_lsMl);
+      const _lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
+      setMeals(_lsMs||_lsMl.reduce((a,x)=>({...a,[x.name]:[]}),{}));
+      setOnboarded(true);
+      const _lsConf=LS.g(`nc2-confirmed-${localDateStr()}`);
+      if(_lsConf&&Object.keys(_lsConf).length>0) setConfirmedMeals(_lsConf);
+      const _lsLogs=LS.g("nc2-nutrition-logs-all");
+      if(_lsLogs?.length) setNutritionLogs(_lsLogs);
+      LS.s('nc2-seen-intro',true); setShowIntro(false);
+      setReady(true); // show UI immediately from cache — Supabase refreshes in background
+    }
+    // Background Supabase refresh (waves 1+2 merged into background when cache hit)
+    if(_lsCacheHit){
+      Promise.all([
+        DB.loadProfile(u.id).then(sbP=>{
+          if(!sbP) return;
+          const pr={name:sbP.name||u.user_metadata?.name||"",gender:sbP.gender||"m",age:sbP.age||"",weight:sbP.weight||"",height:sbP.height||"",bodyFat:sbP.body_fat||"",activity:sbP.activity||1.55,goal:sbP.goal||"lose",numMeals:sbP.num_meals||3,excludedFoods:sbP.excluded_foods||[],bia_fm:sbP.bia_fm||"",bia_vf:sbP.bia_vf||"",bia_bmr:sbP.bia_bmr||"",bia_ffm:sbP.bia_ffm||"",bia_sc_fat:sbP.bia_sc_fat||"",bia_smi:sbP.bia_smi||"",bia_whr:sbP.bia_whr||"",bia_smm:sbP.bia_smm||""};
+          setProfile(pr); LS.s(`nc2-profile-${u.id}`,pr);
+        }).catch(()=>{}),
+        DB.loadTargets(u.id).then(sbT=>{
+          if(!sbT) return;
+          setTargets(sbT.targets); setMealList(sbT.mealList);
+          LS.s(`nc2-targets-${u.id}`,sbT.targets); LS.s(`nc2-meallist-${u.id}`,sbT.mealList);
+        }).catch(()=>{}),
+        DB.loadMeals(u.id,today).then(ms=>{
+          if(!ms) return;
+          setMeals(ms); LS.s(`nc2-meals-${u.id}-${today}`,ms);
+        }).catch(()=>{}),
+      ]).catch(()=>{});
+    } else {
+      // No cache — must wait for Supabase before showing UI (first install path)
       try {
-        const sbT=await DB.loadTargets(u.id);
+        const [sbP,sbT]=await Promise.all([
+          DB.loadProfile(u.id).catch(()=>null),
+          DB.loadTargets(u.id).catch(()=>null),
+        ]);
+        if(sbP) {
+          const pr={name:sbP.name||u.user_metadata?.name||"",gender:sbP.gender||"m",age:sbP.age||"",weight:sbP.weight||"",height:sbP.height||"",bodyFat:sbP.body_fat||"",activity:sbP.activity||1.55,goal:sbP.goal||"lose",numMeals:sbP.num_meals||3,excludedFoods:sbP.excluded_foods||[],bia_fm:sbP.bia_fm||"",bia_vf:sbP.bia_vf||"",bia_bmr:sbP.bia_bmr||"",bia_ffm:sbP.bia_ffm||"",bia_sc_fat:sbP.bia_sc_fat||"",bia_smi:sbP.bia_smi||"",bia_whr:sbP.bia_whr||"",bia_smm:sbP.bia_smm||""};
+          setProfile(pr); LS.s(`nc2-profile-${u.id}`,pr);
+        } else {
+          const lsPr=LS.g(`nc2-profile-${u.id}`); if(lsPr) setProfile(lsPr);
+        }
+        let tg=null, ml=null;
         if(sbT) { tg=sbT.targets; ml=sbT.mealList; }
-      } catch {}
-      if(!tg) { tg=LS.g(`nc2-targets-${u.id}`)||LS.g("nc2-targets"); }
-      if(!ml) { ml=LS.g(`nc2-meallist-${u.id}`)||LS.g("nc2-meallist"); }
-
-      if(tg&&ml) {
-        setTargets(tg); setMealList(ml);
-        try {
-          const ms=await DB.loadMeals(u.id,today);
-          setMeals(ms||ml.reduce((a,x)=>({...a,[x.name]:[]}),{}));
-        } catch {
-          const lsMs=LS.g(`nc2-meals-${u.id}-${today}`);
-          setMeals(lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{}));
-        }
-        setOnboarded(true);
-      }
-
-      // 3. Carica dati aggiuntivi
-      try { const wl=await DB.loadWeightLog(u.id); if(wl?.length){ setWeightLog(wl); LS.s("nc2-weightlog",wl); checkWeightPrompt(wl); } } catch {}
-      try {
-        const pt=await DB.loadPantry(u.id);
-        if(pt?.length){
-          // Usa Supabase come fonte autoritativa, ma non sovrascrivere il LS
-          // se il LS ha un timestamp più recente (protezione da race condition Bug 6)
-          const lsPantryTs=LS.g("nc2-pantry-ts")||0;
-          const nowTs=Date.now();
-          // Considera il LS più recente se aggiornato negli ultimi 10s (write in volo)
-          if(nowTs-lsPantryTs>10000){
-            setPantry(pt); LS.s("nc2-pantry",pt); LS.s("nc2-pantry-ts",nowTs);
-          } else {
-            // LS recente: usa LS ma accetta dati Supabase per sicurezza se LS vuoto
-            const lsPt=LS.g("nc2-pantry")||[];
-            setPantry(lsPt.length?lsPt:pt);
+        if(!tg) { tg=LS.g(`nc2-targets-${u.id}`)||LS.g("nc2-targets"); }
+        if(!ml) { ml=LS.g(`nc2-meallist-${u.id}`)||LS.g("nc2-meallist"); }
+        if(tg&&ml) {
+          setTargets(tg); setMealList(ml);
+          try {
+            const ms=await DB.loadMeals(u.id,today);
+            const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
+            const finalMs=ms||lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{});
+            setMeals(finalMs);
+            if(!ms&&lsMs) DB.saveMeals(u.id,today,lsMs).catch(()=>{});
+          } catch {
+            const lsMs=LS.g(`nc2-meals-${u.id}-${today}`)||LS.g(`nc2-meals-${today}`);
+            setMeals(lsMs||ml.reduce((a,x)=>({...a,[x.name]:[]}),{}));
           }
+          setOnboarded(true);
         }
-      } catch {}
-      try { const fav=await DB.loadFavMeals(u.id); if(fav?.length){ setFavMeals(fav); LS.s("nc2-favmeals",fav); } } catch {}
-      try { const cf=await DB.loadCustomFoods(u.id); if(cf?.length){ setCustomFoods(cf); LS.s("nc2-customfoods",cf); } } catch {}
-      try {
-        const from30=new Date(); from30.setDate(from30.getDate()-30);
-        const nl=await DB.loadNutritionLogs(u.id,from30.toISOString().slice(0,10));
+      } catch(e) { console.warn("loadUser error:", e); }
+      const todayStr2=localDateStr();
+      const lsConfirmed=LS.g(`nc2-confirmed-${todayStr2}`);
+      if(lsConfirmed&&Object.keys(lsConfirmed).length>0){
+        setConfirmedMeals(prev=>Object.keys(prev).length>0?prev:lsConfirmed);
+      }
+      const lsLogs=LS.g("nc2-nutrition-logs-all");
+      if(lsLogs?.length){ setNutritionLogs(prev=>prev.length?prev:lsLogs); }
+      LS.s('nc2-seen-intro',true); setShowIntro(false);
+      setReady(true);
+    }
+    // Wave 3: all remaining fetches in parallel, non-blocking
+    const _f30=new Date(); _f30.setDate(_f30.getDate()-30);
+    const _from30Str=`${_f30.getFullYear()}-${String(_f30.getMonth()+1).padStart(2,'0')}-${String(_f30.getDate()).padStart(2,'0')}`;
+    const _fw30=new Date(); _fw30.setDate(_fw30.getDate()-30);
+    const _from30wStr=`${_fw30.getFullYear()}-${String(_fw30.getMonth()+1).padStart(2,'0')}-${String(_fw30.getDate()).padStart(2,'0')}`;
+    const _todayStr=localDateStr();
+    Promise.all([
+      DB.loadWeightLog(u.id).then(wl=>{ if(wl?.length){ setWeightLog(wl); LS.s("nc2-weightlog",wl); checkWeightPrompt(wl); }}).catch(()=>{}),
+      DB.loadWeightSkip(u.id).then(wsd=>{ if(wsd) LS.s("nc2-weight-skip-date",wsd); }).catch(()=>{}),
+      DB.loadPantry(u.id).then(pt=>{
+        if(pt?.length){
+          const lsPantryTs=LS.g("nc2-pantry-ts")||0; const nowTs=Date.now();
+          if(nowTs-lsPantryTs>10000){ setPantry(pt); LS.s("nc2-pantry",pt); LS.s("nc2-pantry-ts",nowTs); }
+          else { const lsPt=LS.g("nc2-pantry")||[]; setPantry(lsPt.length?lsPt:pt); }
+        }
+      }).catch(()=>{}),
+      DB.loadFavMeals(u.id).then(fav=>{ if(fav?.length){ setFavMeals(fav); LS.s("nc2-favmeals",fav); }}).catch(()=>{}),
+      DB.loadCustomFoods(u.id).then(cf=>{ if(cf?.length){ setCustomFoods(cf); LS.s("nc2-customfoods",cf); }}).catch(()=>{}),
+      DB.loadNutritionLogs(u.id,_from30Str).then(async nl=>{
         if(nl){
-          setNutritionLogs(nl);
-          // Ricostruisci confirmedMeals per oggi dai log Supabase
           const todayStr=localDateStr();
           const todayLogs=nl.filter(l=>l.date===todayStr);
           if(todayLogs.length>0){
             const rebuilt=todayLogs.reduce((acc,l)=>({...acc,[l.mealName]:true}),{});
-            setConfirmedMeals(rebuilt);
-            LS.s(`nc2-confirmed-${todayStr}`,rebuilt);
+            setConfirmedMeals(rebuilt); LS.s(`nc2-confirmed-${todayStr}`,rebuilt);
           }
+          const _lsLogs=LS.g("nc2-nutrition-logs-all");
+          if(_lsLogs?.length){
+            const key=l=>`${l.date}|${l.mealName}`;
+            const sbKeys=new Set(nl.map(key));
+            const missing=_lsLogs.filter(l=>!sbKeys.has(key(l)));
+            setNutritionLogs(missing.length>0?[...nl,...missing]:nl);
+          } else { setNutritionLogs(nl); }
+          try { const sp=await DB.loadPlans(u.id); if(sp) setSavedPlans(sp); } catch {}
         }
-        try { const sp=await DB.loadPlans(u.id); if(sp) setSavedPlans(sp); } catch {}
-      } catch {}
-      // Load workout logs from Supabase
-      try {
-        const _from30w=new Date(); _from30w.setDate(_from30w.getDate()-30);
-        const _wls=await DB.loadWorkoutLogs(u.id,_from30w.toISOString().slice(0,10));
-        if(_wls&&_wls.length){ setWorkoutLogs(_wls); LS.s("nc2-workouts",_wls); }
-      } catch {}
-      // Load meal ratings from Supabase
-      try {
-        const _mr=await DB.loadMealRatings(u.id);
-        if(_mr&&Object.keys(_mr).length){ setMealRatings(_mr); LS.s("nc2-meal-ratings",_mr); }
-      } catch {}
-    } catch(e) {
-      console.warn("loadUser error:", e);
-    }
-    // Fallback: ricostruisci confirmedMeals da LS se Supabase non ha restituito logs
-    const todayStr2=localDateStr();
-    const lsConfirmed=LS.g(`nc2-confirmed-${todayStr2}`);
-    if(lsConfirmed&&Object.keys(lsConfirmed).length>0){
-      setConfirmedMeals(prev=>Object.keys(prev).length>0?prev:lsConfirmed);
-    }
-    // Fallback: carica nutrition logs dal LS multi-giorno se Supabase non ha dati
-    const lsLogs=LS.g("nc2-nutrition-logs-all");
-    if(lsLogs?.length){
-      setNutritionLogs(prev=>prev.length>0?prev:lsLogs);
-    }
-    LS.s('nc2-seen-intro',true);
-    setShowIntro(false);
-    setReady(true);
+      }).catch(()=>{}),
+      DB.loadWorkoutLogs(u.id,_from30wStr).then(_wls=>{ if(_wls&&_wls.length){ setWorkoutLogs(_wls); LS.s("nc2-workouts",_wls); }}).catch(()=>{}),
+      DB.loadMealRatings(u.id).then(_mr=>{ if(_mr&&Object.keys(_mr).length){ setMealRatings(_mr); LS.s("nc2-meal-ratings",_mr); }}).catch(()=>{}),
+      DB.loadWeeklyPlan(u.id).then(wp=>{
+        if(wp?.plan){ setWeeklyPlan(wp.plan); LS.s("nc2-weeklyplan",wp.plan); }
+        else { const lsWp=LS.g("nc2-weeklyplan"); const lsSeed=LS.g("nc2-planseed")||0; if(lsWp){ setWeeklyPlan(lsWp); DB.saveWeeklyPlan(u.id,lsWp,lsSeed).catch(()=>{}); } }
+        if(wp?.seed!=null){ setPlanSeed(wp.seed); LS.s("nc2-planseed",wp.seed); }
+      }).catch(()=>{}),
+      DB.loadLockedMeals(u.id,_todayStr).then(locked=>{ if(locked&&Object.keys(locked).length){ setLockedMeals(locked); LS.s(`nc2-locked-${_todayStr}`,locked); }}).catch(()=>{}),
+      DB.loadSeenIntro(u.id).then(si=>{ if(si){ LS.s("nc2-seen-intro",true); setShowIntro(false); }}).catch(()=>{}),
+    ]);
   };
 
   const checkWeightPrompt=wl=>{
@@ -6114,7 +6501,7 @@ export default function App() {
       return updated;
     });
   };
-  const saveMeals=ms=>{ LS.s(`nc2-meals${user?"-"+user.id:""}-${today}`,ms); if(user) DB.saveMeals(user.id,today,ms); };
+  const saveMeals=ms=>{ LS.s(`nc2-meals${user?"-"+user.id:""}-${today}`,ms); if(user) DB.saveMeals(user.id,today,ms).catch(e=>console.error("saveMeals error:",e)); };
   const saveProfile=pr=>{ LS.s(`nc2-profile${user?"-"+user.id:""}`,pr); if(user) DB.saveProfile(user.id,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[],bia_fm:pr.bia_fm||null,bia_vf:pr.bia_vf||null,bia_bmr:pr.bia_bmr||null,bia_ffm:pr.bia_ffm||null,bia_sc_fat:pr.bia_sc_fat||null,bia_smi:pr.bia_smi||null,bia_whr:pr.bia_whr||null,bia_smm:pr.bia_smm||null}); };
 
   const completeOnboarding=(pr,tg,currentUser,presetDiet=null)=>{
@@ -6125,7 +6512,7 @@ export default function App() {
     // Salva profilo su LS e Supabase
     LS.s(`nc2-profile${uid?"-"+uid:""}`,pr);
     LS.s(`nc2-onboarded${uid?"-"+uid:""}`,true); // flag onboarding completato
-    if(uid&&supabase) DB.saveProfile(uid,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[]});
+    if(uid&&supabase) DB.saveProfile(uid,{name:pr.name,gender:pr.gender,age:pr.age,weight:pr.weight,height:pr.height,body_fat:pr.bodyFat||null,activity:pr.activity,goal:pr.goal,num_meals:pr.numMeals,excluded_foods:pr.excludedFoods||[],bia_fm:pr.bia_fm||null,bia_vf:pr.bia_vf||null,bia_bmr:pr.bia_bmr||null,bia_ffm:pr.bia_ffm||null,bia_sc_fat:pr.bia_sc_fat||null,bia_smi:pr.bia_smi||null,bia_whr:pr.bia_whr||null,bia_smm:pr.bia_smm||null});
     // Salva targets su LS e Supabase
     LS.s(`nc2-targets${uid?"-"+uid:""}`,tg);
     LS.s(`nc2-meallist${uid?"-"+uid:""}`,ml);
@@ -6204,6 +6591,11 @@ export default function App() {
       delete updated[mealName];
       setConfirmedMeals(updated);
       LS.s(`nc2-confirmed-${today}`,updated);
+      // Rimuovi lock
+      const updLocked={...lockedMeals};
+      delete updLocked[mealName];
+      setLockedMeals(updLocked);
+      LS.s(`nc2-locked-${today}`,updLocked);
       if(user) DB.deleteNutritionLog(user.id,today,mealName);
       setNutritionLogs(prev=>prev.filter(l=>!(l.date===today&&l.mealName===mealName)));
     } else {
@@ -6221,12 +6613,17 @@ export default function App() {
       const updated={...confirmedMeals,[mealName]:true};
       setConfirmedMeals(updated);
       LS.s(`nc2-confirmed-${today}`,updated);
+      // Auto-blocca il pasto alla conferma
+      const newLocked={...lockedMeals,[mealName]:true};
+      setLockedMeals(newLocked);
+      LS.s(`nc2-locked-${today}`,newLocked);
       const entry={date:today,mealName,calories:Math.round(tot2.cal),protein:Math.round(tot2.p*10)/10,carbs:Math.round(tot2.c*10)/10,fat:Math.round(tot2.f*10)/10};
       const updatedLogs=[...nutritionLogs.filter(l=>!(l.date===today&&l.mealName===mealName)),entry];
       setNutritionLogs(updatedLogs);
       // Salva in localStorage come backup multi-giorno (Bug 2 fix)
+      // Salva su LS multi-giorno con merge: preserva log di tutti i giorni
       const allLsLogs=LS.g("nc2-nutrition-logs-all")||[];
-      const mergedLsLogs=[...allLsLogs.filter(l=>!(l.date===today&&l.mealName===mealName)),entry];
+      const mergedLsLogs=[...allLsLogs.filter(l=>!(l.date===entry.date&&l.mealName===entry.mealName)),entry];
       LS.s("nc2-nutrition-logs-all",mergedLsLogs);
       if(user){ try{ await DB.saveNutritionLog(user.id,today,mealName,tot2.cal,tot2.p,tot2.c,tot2.f); }catch(e){ console.error("saveNutritionLog failed:",e); } }
       // Trigger rating prompt
@@ -6238,22 +6635,9 @@ export default function App() {
 
   const applyPresetDiet=(diet)=>{
     if(!targets) return;
-    // Calcola numero pasti dal pattern del piano
-    const samplePattern=diet.patterns[0]||{};
-    const patternMealCount=Object.keys(samplePattern).length||profile.numMeals;
-    // Aggiorna profilo e mealList se il numero di pasti cambia
-    const bestCfg=MEAL_CONFIGS[patternMealCount]||MEAL_CONFIGS[Math.min(5,Math.max(1,patternMealCount))];
-    const newML=bestCfg;
-    const needsUpdate=patternMealCount!==profile.numMeals;
-    if(needsUpdate){
-      const updProf={...profile,numMeals:patternMealCount};
-      setProfile(updProf); setMealList(newML);
-      LS.s(`nc2-profile${user?"-"+user.id:""}`,updProf);
-      LS.s(`nc2-meallist${user?"-"+user.id:""}`,newML);
-      if(user&&supabase) DB.saveTargets(user.id,targets,newML);
-    }
-    const activeMealList=needsUpdate?newML:mealList;
-    const activeNumMeals=patternMealCount; // usa il valore locale, non profile (async)
+    // Usa sempre il numero di pasti scelto dall'utente — adatta la dieta, non il profilo
+    const activeMealList=mealList.length>0?mealList:(MEAL_CONFIGS[profile.numMeals]||MEAL_CONFIGS[3]);
+    const activeNumMeals=activeMealList.length; // usa il valore locale, non profile (async)
     const newPlan=Array.from({length:7},(_,dayIdx)=>{
       const pat=diet.patterns[dayIdx%diet.patterns.length];
       const dayMeals={};
@@ -6322,7 +6706,8 @@ export default function App() {
       const dayMeals={};
       mealList.forEach(meal=>{
         const mKey=meal.name;
-        const mTgt=mealTarget(targets,mKey,profile.numMeals);
+        const _pct=meal.pct||(1/mealList.length);
+        const mTgt={calories:Math.round(targets.calories*_pct),protein:Math.round(targets.protein*_pct),carbs:Math.round(targets.carbs*_pct),fat:Math.round(targets.fat*_pct)};
         const foods=(selectPantryFoodsForTarget(mTgt,mKey)||[]).filter(f=>!isExcluded(f.name,excl14));
         if(!foods.length){ dayMeals[mKey]=[]; return; }
         const qtys=optimize(foods,mTgt);
@@ -6336,14 +6721,17 @@ export default function App() {
     setIsCustomized(false);
   };
 
-  const buildItems=(foods,mealName)=>{ if(!targets) return []; const name=mealName||selMeal; const mt=mealTarget(targets,name,profile.numMeals); const qtys=optimize(foods,mt); const raw=foods.map((food,i)=>({food,quantity:qtys[i]})); return filterRealisticItems(raw,mt); };
+  const buildItems=(foods,mealName)=>{ if(!targets) return []; const name=mealName||selMeal; const _bml=mealList.find(m=>m.name===name||m.nameEn===name); const _bpct=_bml?.pct||(1/(mealList.length||profile.numMeals)); const mt={calories:Math.round(targets.calories*_bpct),protein:Math.round(targets.protein*_bpct),carbs:Math.round(targets.carbs*_bpct),fat:Math.round(targets.fat*_bpct)}; const qtys=optimize(foods,mt); const raw=foods.map((food,i)=>({food,quantity:qtys[i]})); return filterRealisticItems(raw,mt); };
 
   // Seleziona cibi dalla Credenza bilanciando categorie macro in base ai target reali del pasto
-  const selectPantryFoodsForTarget=(mTgt,mealNameArg)=>{
+  const selectPantryFoodsForTarget=(mTgt,mealNameArg,rotIdx=0)=>{
     const excl=profile.excludedFoods||[];
     const available=pantry.filter(it=>it.qty>0).map(it=>it.food).filter(f=>!isExcluded(f.name,excl));
     if(!available.length) return null;
-    return selectStructuredPantryFoods(mealNameArg||selMeal||"", available, mTgt);
+    const mKey=resolveItalianMealKey(mealNameArg||selMeal||"");
+    const recipes=WEEK_RECIPES[mKey]||WEEK_RECIPES["Pranzo"];
+    // Usa selezione basata su ricetta (Opzione A): compatibilità culinaria garantita
+    return selectPantryFoodsForRecipe(mealNameArg||selMeal||"", available, recipes, rotIdx, mealRatings||{});
   };
 
   // Seleziona i migliori cibi dalla Credenza in base all'obiettivo (usato da generateMeal)
@@ -6376,7 +6764,9 @@ export default function App() {
       const pt=totals(planItems);
       mTgt={calories:Math.round(pt.cal),protein:Math.round(pt.p),carbs:Math.round(pt.c),fat:Math.round(pt.f)};
     } else {
-      mTgt=mealTarget(targets,mealName,profile.numMeals);
+      const _rml=mealList.find(m=>m.name===mealName||m.nameEn===mealName);
+      const _rpct=_rml?.pct||(1/(mealList.length||profile.numMeals));
+      mTgt={calories:Math.round(targets.calories*_rpct),protein:Math.round(targets.protein*_rpct),carbs:Math.round(targets.carbs*_rpct),fat:Math.round(targets.fat*_rpct)};
     }
     // Seleziona cibi bilanciati sui macro target del pasto
     const bestFoods=selectPantryFoodsForTarget(mTgt,mealName);
@@ -6395,14 +6785,25 @@ export default function App() {
     setMeals(nm); saveMeals(nm);
   };
 
+  const unlockMeal=(mealName)=>{
+    const updated={...lockedMeals};
+    delete updated[mealName];
+    setLockedMeals(updated);
+    LS.s(`nc2-locked-${today}`,updated);
+  };
+
   const generateMeal=name=>{
-    if(confirmedMeals&&confirmedMeals[name]){ alert(lang==="en"?"Meal already confirmed. Unconfirm first to modify it.":"Pasto già confermato. De-conferma prima di modificarlo."); return; }
+    if(lockedMeals&&lockedMeals[name]){ alert(lang==="en"?"Meal is locked. Unlock it first to modify.":"Pasto bloccato. Sbloccalo prima di modificarlo."); return; }
     if(pantry.length===0) {
       alert(lang==="en"?"Pantry is empty. Add items to Pantry first.":"La Credenza è vuota. Aggiungi degli alimenti nella Credenza prima di generare un pasto automatico.");
       return;
     }
-    const _genMTgt=mealTarget(targets,name,profile.numMeals);
-    const bestFoods=selectPantryFoodsForTarget(_genMTgt,name);
+    const _mealInfo=mealList.find(m=>m.name===name||m.nameEn===name);
+    const _pctM=_mealInfo?.pct||(1/(mealList.length||profile.numMeals));
+    const _genMTgt={calories:Math.round(targets.calories*_pctM),protein:Math.round(targets.protein*_pctM),carbs:Math.round(targets.carbs*_pctM),fat:Math.round(targets.fat*_pctM)};
+    // Rotazione basata su seed + pasti già confermati oggi per variare gli alimenti
+    const _rotIdx=(planSeed+Object.keys(confirmedMeals||{}).length)%7;
+    const bestFoods=selectPantryFoodsForTarget(_genMTgt,name,_rotIdx);
     if(!bestFoods||!bestFoods.length) {
       alert(lang==="en"?"All pantry items are exhausted or no suitable foods for this meal. Update quantities.":"Credenza esaurita o nessun alimento adatto per questo pasto. Aggiorna le quantità.");
       return;
@@ -6410,6 +6811,20 @@ export default function App() {
     const items=buildItems(bestFoods,name);
     const nm={...meals,[name]:items};
     setMeals(nm); saveMeals(nm);
+    // Toast con nome ricetta usata
+    const _mKeyToast=resolveItalianMealKey(name);
+    const _recipesT=WEEK_RECIPES[_mKeyToast]||WEEK_RECIPES["Pranzo"];
+    const _ratingT=mealRatings||{};
+    const _hrf=new Set(Object.values(_ratingT).flat().filter(r=>r.rating>=4).flatMap(r=>r.foods||[]));
+    const _sc=_recipesT.map((r,i)=>({r,i,score:r.foods.filter(f=>_hrf.has(f)).length}));
+    _sc.sort((a,b)=>b.score-a.score);
+    const _tg=_sc.filter(s=>s.score===_sc[0].score);
+    const _ri=(_rotIdx)%_tg.length;
+    const _toastRecipe=_tg[_ri].r;
+    const _el=document.createElement('div');
+    _el.textContent='🫙 '+_toastRecipe.name;
+    _el.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#0A1318;color:#00E5A0;padding:10px 18px;border-radius:12px;font-weight:700;font-size:13px;border:1px solid #00E5A044;z-index:999;pointer-events:none';
+    document.body.appendChild(_el); setTimeout(()=>_el.remove(),2500);
     // Sottrai le quantità usate dalla credenza
     const usedQtys={};
     items.forEach(it=>{ usedQtys[it.food.name]=(usedQtys[it.food.name]||0)+it.quantity; });
@@ -6424,18 +6839,29 @@ export default function App() {
   };
 
   const generateMealFromDB=name=>{
-    if(confirmedMeals&&confirmedMeals[name]){ alert(lang==="en"?"Meal already confirmed. Unconfirm first to modify it.":"Pasto già confermato. De-conferma prima di modificarlo."); return; }
+    if(lockedMeals&&lockedMeals[name]){ alert(lang==="en"?"Meal is locked. Unlock it first to modify.":"Pasto bloccato. Sbloccalo prima di modificarlo."); return; }
     const key=resolveItalianMealKey(name);
     const recipes=WEEK_RECIPES[key]||WEEK_RECIPES["Pranzo"];
-    // Variety: rotate recipe based on seed + confirmed count
-    const recipeIdx=(planSeed+Object.keys(confirmedMeals||{}).length)%recipes.length;
-    const recipe=recipes[recipeIdx];
+    // Scegli ricetta in base a seed + pasti confermati oggi + punteggio rating
+    // Le ricette con alimenti più votati ottengono un bonus nel punteggio
+    const ratings=(mealRatings||{})[key]||[];
+    const highRatedFoods=new Set(
+      ratings.filter(r=>r.rating>=4).flatMap(r=>r.foods)
+    );
+    // Punteggio ricetta: +1 per ogni alimento della ricetta già votato bene
+    const scored=recipes.map((r,i)=>({
+      recipe:r, idx:i,
+      score: r.foods.filter(f=>highRatedFoods.has(f)).length
+    }));
+    // Raggruppa le ricette per punteggio: preferisci le votate, ruota all'interno del gruppo
+    scored.sort((a,b)=>b.score-a.score);
+    const topScore=scored[0].score;
+    const topGroup=scored.filter(s=>s.score===topScore);
+    const rotBase=(planSeed+Object.keys(confirmedMeals||{}).length);
+    const recipe=topGroup[rotBase%topGroup.length].recipe;
     const excl=profile.excludedFoods||[];
-    // Prefer foods from high-rated meals of this meal type
-    const topRated=((mealRatings||{})[key]||[]).filter(r=>r.rating>=4).flatMap(r=>r.foods).slice(0,2);
-    const mergedNames=[...new Set([...topRated,...recipe.foods])].slice(0,5);
-    let foods=mergedNames.map(n=>findFood(n)).filter(Boolean).filter(f=>!isExcluded(f.name,excl));
-    if(!foods.length) foods=recipe.foods.map(n=>findFood(n)).filter(Boolean).filter(f=>!isExcluded(f.name,excl));
+    // Usa SOLO i cibi della ricetta scelta (max 4) — nessuna aggiunta da history
+    let foods=recipe.foods.map(n=>findFood(n)).filter(Boolean).filter(f=>!isExcluded(f.name,excl));
     if(!foods.length) return;
     const items=buildItems(foods,name);
     const nm={...meals,[name]:items};
@@ -6443,18 +6869,42 @@ export default function App() {
     // Toast with recipe name
     const _el=document.createElement('div');
     _el.textContent='🍽️ '+recipe.name;
-    _el.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#0D1117;color:#00D563;padding:10px 18px;border-radius:12px;font-weight:700;font-size:13px;border:1px solid #00D56344;z-index:999;pointer-events:none';
+    _el.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#0A1318;color:#00E5A0;padding:10px 18px;border-radius:12px;font-weight:700;font-size:13px;border:1px solid #00E5A044;z-index:999;pointer-events:none';
     document.body.appendChild(_el); setTimeout(()=>_el.remove(),2500);
+  };
+
+  // Costruisce snapshot completo: merge meals state + piano per slot vuoti
+  const buildMealSnapshot=(planDayNow,name,items)=>{
+    const allKeys=new Set([...Object.keys(meals),...(planDayNow?Object.keys(planDayNow):[])]);
+    const snap={};
+    allKeys.forEach(k=>{ snap[k]=(meals[k]||[]).length>0?meals[k]:(planDayNow?.[k]||[]); });
+    snap[name]=items;
+    return snap;
   };
 
   const addFood=(name,food)=>{
     const todayIdx2=(new Date().getDay()+6)%7;
     const planDayNow=weeklyPlan?weeklyPlan[todayIdx2]:null;
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
-    // NON ricalcolare le quantità esistenti — aggiunge il nuovo cibo con quantità iniziale
-    const initQty=food.unit==="pz"?1:100;
+    // Auto-calcola quantità ottimale per rispettare il budget calorico residuo del pasto
+    let initQty;
+    if(food.unit==="pz"){ initQty=1; }
+    else {
+      const mInfo=mealList.find(m=>m.name===name||m.nameEn===name);
+      const pct=mInfo?.pct||(1/(mealList.length||profile.numMeals));
+      const mTgt=targets?{calories:Math.round(targets.calories*pct),protein:Math.round(targets.protein*pct),carbs:Math.round(targets.carbs*pct),fat:Math.round(targets.fat*pct)}:null;
+      if(mTgt&&food.cal>0){
+        const curTot=totals(baseItems);
+        const remainCal=Math.max(0, mTgt.calories - curTot.cal);
+        if(remainCal>10){
+          // Quantità per colpire le calorie rimanenti (per 100g)
+          initQty=Math.round((remainCal/food.cal)*100);
+          initQty=Math.max(30,Math.min(400,initQty));
+        } else { initQty=50; }
+      } else { initQty=100; }
+    }
     const items=[...baseItems,{food,quantity:initQty}];
-    const nm={...meals,[name]:items};
+    const nm=buildMealSnapshot(planDayNow,name,items);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6466,7 +6916,7 @@ export default function App() {
     const planDayNow=weeklyPlan?weeklyPlan[todayIdx2]:null;
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     const merged=[...baseItems,...newItems];
-    const nm={...meals,[name]:merged};
+    const nm=buildMealSnapshot(planDayNow,name,merged);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:merged}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6479,7 +6929,7 @@ export default function App() {
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     // NON ricalcolare le rimanenti — rimuove solo l'elemento indicato
     const items=baseItems.filter((_,i)=>i!==idx);
-    const nm={...meals,[name]:items};
+    const nm=buildMealSnapshot(planDayNow,name,items);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6491,7 +6941,7 @@ export default function App() {
     const planDayNow=weeklyPlan?weeklyPlan[todayIdx2]:null;
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     const u=[...baseItems]; u[idx]={...u[idx],quantity:Math.max(0,parseInt(qty)||0)};
-    const nm={...meals,[name]:u};
+    const nm=buildMealSnapshot(planDayNow,name,u);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6504,7 +6954,7 @@ export default function App() {
     const baseItems=(meals[name]||[]).length>0?meals[name]:(planDayNow?.[name]||[]);
     const u=[...baseItems]; const def=unit==="pz"?1:100;
     u[idx]={...u[idx],food:{...u[idx].food,unit},quantity:def};
-    const nm={...meals,[name]:u};
+    const nm=buildMealSnapshot(planDayNow,name,u);
     if(weeklyPlan){
       const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
@@ -6536,9 +6986,7 @@ export default function App() {
   const manualLogWeight=()=>{ const w=parseFloat(newWeight); if(w&&w>30&&w<300){logWeight(w);setNewWeight("");} };
 
   const handleLogout=async()=>{
-    if(supabase) await supabase.auth.signOut();
-    // Resetta solo user e onboarded per tornare al login
-    // I dati rimangono su Supabase e vengono ricaricati al prossimo login
+    try { if(supabase) await supabase.auth.signOut(); } catch(e) { console.warn("signOut error:",e); }
     setUser(null); setOnboarded(false);
   };
   const handleReset=()=>{
@@ -6551,12 +6999,14 @@ export default function App() {
     setOnboarded(false);
   };
 
+  if(!langChosen) return <LangSelectScreen onSelect={selectLang}/>;
   if(!ready) return <div style={{...ss,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}><style>{FONTS}</style><Spin size={32}/></div>;
-  if(showIntro) return <WelcomeSlideshow onDone={()=>{ LS.s('nc2-seen-intro',true); setShowIntro(false); setTab("profile"); }}/>;
+  if(showIntro) return <WelcomeSlideshow onDone={()=>{ LS.s('nc2-seen-intro',true); setShowIntro(false); setTab("profile"); if(user) DB.saveSeenIntro(user.id).catch(()=>{}); }}/>;
   if(supabase&&!user) return <AuthScreen onAuth={loadUser}/>;
   if(!onboarded) return <OnboardingScreen user={user} isNewUser={!LS.g(`nc2-onboarded${user?"-"+user?.id:""}`)} onComplete={(pr,tg,presetDiet)=>completeOnboarding(pr,tg,user,presetDiet)}/>;
 
-  const allTot=totals(Object.values(meals).flat());
+  const activeMealNames=new Set(mealList.map(m=>m.name));
+  const allTot=totals(Object.entries(meals).filter(([k])=>activeMealNames.has(k)).flatMap(([,v])=>v));
   const mealData=mealList.find(m=>m.name===selMeal);
 
   // todayPlanIdx deve essere definito PRIMA di mealItems
@@ -6656,6 +7106,40 @@ export default function App() {
     </>
   );
 
+  if(tab==="piano"&&planSelMeal) return (
+    <>
+      <style>{FONTS}</style>
+      <div style={ss}>
+        <PlanMealDetailScreen
+          mealName={planSelMeal.mealName} dayIdx={planSelMeal.dayIdx}
+          items={planSelMeal.items} target={planSelMeal.target}
+          pantry={pantry} lang={lang} optimize={optimize} filterRealisticItems={filterRealisticItems}
+          onBack={()=>setPlanSelMeal(null)}
+          onSave={(newItems)=>{
+            const updated=weeklyPlan.map((day,di)=>di!==planSelMeal.dayIdx?day:{...day,[planSelMeal.mealName]:newItems});
+            setWeeklyPlan(updated); LS.s("nc2-weeklyplan",updated); setPlanSelMeal(null);
+          }}
+        />
+      </div>
+    </>
+  );
+
+  if(tab==="piano"&&!planSelMeal) return (
+    <>
+      <style>{FONTS}</style>
+      <div style={ss}>
+        <MealPlanScreen weeklyPlan={weeklyPlan} mealList={mealList} targets={targets} lang={lang}
+          onGenerate={handleGeneratePlan} onGenerateFromPantry={handleGeneratePlanFromPantry}
+          onReset={()=>{ setWeeklyPlan(null); LS.s("nc2-weeklyplan",null); }}
+          onMealClick={(mealName,dayIdx,items,target)=>setPlanSelMeal({mealName,dayIdx,items,target})}
+          onOpenDietLibrary={()=>setShowDietLibrary(true)}
+          onBack={()=>setTab("today")}
+        />
+        <BottomNav tab={tab} setTab={setTab} lang={lang} setSubScreen={setSubScreen}/>
+      </div>
+    </>
+  );
+
   if(subScreen==="piano"&&!planSelMeal) return (
     <>
       <style>{FONTS}</style>
@@ -6738,9 +7222,13 @@ export default function App() {
           favMeals={favMeals.filter(f=>f.mealType===selMeal)} lang={lang}
           onBack={()=>setSelMeal(null)} onAdd={f=>addFood(selMeal,f)} onRemove={idx=>removeFood(selMeal,idx)} onQty={(idx,qty)=>updateQty(selMeal,idx,qty)} onUnit={(idx,unit)=>updateUnit(selMeal,idx,unit)} onGenerate={()=>generateMeal(selMeal)} onGenerateDB={()=>generateMealFromDB(selMeal)} onClear={()=>{ const nm={...meals,[selMeal]:[]}; setMeals(nm); saveMeals(nm); }}
           onRecalc={()=>{ const foods=(meals[selMeal]||[]).map(i=>i.food); const items=buildItems(foods,selMeal); const nm={...meals,[selMeal]:items}; setMeals(nm); saveMeals(nm); }}
+          onSwap={(idx,newFood,newQty)=>{ const newItems=mealItems.map((it,i)=>i===idx?{food:newFood,quantity:newQty}:it); const nm={...meals,[selMeal]:newItems}; setMeals(nm); saveMeals(nm); }}
           onSaveFav={(name)=>saveFavMeal(selMeal,mealItems,name)} onApplyFav={applyFavMeal} onDeleteFav={deleteFavMeal} onAddItems={items=>addFoodItems(selMeal,items)}
           isConfirmed={!!(confirmedMeals&&confirmedMeals[selMeal])}
-          onUnconfirm={()=>confirmMeal(selMeal,mealTot)} onSaveCustomFood={saveCustomFood}/>
+          isLocked={!!(lockedMeals&&lockedMeals[selMeal])}
+          onUnconfirm={()=>confirmMeal(selMeal,mealTot)}
+          onUnlock={()=>unlockMeal(selMeal)}
+          onSaveCustomFood={saveCustomFood}/>
       </div>
     </>
   );
@@ -6750,8 +7238,8 @@ export default function App() {
   return (
     <div key={lang} style={{...ss,paddingBottom:70}}>
       <style>{FONTS}</style>
-      {showWeightModal&&<WeightModal profile={profile} onSave={logWeight} onSkip={()=>{ LS.s("nc2-weight-skip-date",today); setShowWeightModal(false); }} lang={lang}/>}
-      {tab==="today"&&!pantryEditMeal&&<TodayScreen targets={targets} mealList={mealList} meals={meals} weeklyPlan={weeklyPlan} isCustomized={isCustomized} allTot={allTot} planMealTargets={planMealTargets} profile={profile} lang={lang} weightLog={weightLog} confirmedMeals={confirmedMeals} onConfirmMeal={confirmMeal} customFoods={customFoods} onMealClick={name=>{
+      {showWeightModal&&<WeightModal profile={profile} onSave={logWeight} onSkip={()=>{ LS.s("nc2-weight-skip-date",today); setShowWeightModal(false); if(user) DB.saveWeightSkip(user.id,today); }} lang={lang}/>}
+      {tab==="today"&&!pantryEditMeal&&<TodayScreen targets={targets} mealList={mealList} meals={meals} weeklyPlan={weeklyPlan} isCustomized={isCustomized} allTot={allTot} planMealTargets={planMealTargets} profile={profile} lang={lang} weightLog={weightLog} confirmedMeals={confirmedMeals} lockedMeals={lockedMeals} onConfirmMeal={confirmMeal} onUnlockMeal={unlockMeal} customFoods={customFoods} onMealClick={name=>{
           const todayIdx2=(new Date().getDay()+6)%7;
           const planDay2=weeklyPlan?weeklyPlan[todayIdx2]:null;
           if(planDay2&&!(meals[name]||[]).length){
@@ -6836,7 +7324,16 @@ export default function App() {
       {ratingOverlay}
       {tab==="credenza"&&<CredenzaScreen pantry={pantry} setPantry={setPantry} savePantry={savePantry} lang={lang} user={user} customFoods={customFoods} setCustomFoods={setCustomFoods}/>}
       {/* piano now accessible via FAB or ProfileScreen */}
-      {tab==="profile"&&<ProfileScreen profile={profile} setProfile={setProfile} targets={targets} user={user} weightLog={weightLog} newWeight={newWeight} setNewWeight={setNewWeight} onLog={manualLogWeight} onCalc={recalc} onLogout={handleLogout} onReset={handleReset} onManualMacros={manualMacros} onSaveExcluded={pr=>{setProfile(pr);saveProfile(pr);}} lang={lang} onChangeLang={changeLang} onShowProgress={()=>{setSelMeal(null);setTab("progress");}} onOpenPiano={()=>{setSelMeal(null);setSubScreen("piano");}} onOpenImport={()=>{setSelMeal(null);setSubScreen("import");}} onOpenDietLibrary={()=>setShowDietLibrary(true)}/>}
+      {tab==="profile"&&<ProfileScreen profile={profile} setProfile={setProfile} targets={targets} user={user} weightLog={weightLog} newWeight={newWeight} setNewWeight={setNewWeight} onLog={manualLogWeight} onCalc={recalc} onLogout={handleLogout} onReset={handleReset} onManualMacros={manualMacros} onSaveExcluded={pr=>{setProfile(pr);saveProfile(pr);}} onSaveProfile={pr=>{
+  setProfile(pr);
+  saveProfile(pr);
+  if(pr.numMeals!==profile.numMeals){
+    const newML=MEAL_CONFIGS[pr.numMeals]||MEAL_CONFIGS[3];
+    setMealList(newML);
+    LS.s(`nc2-meallist${user?"-"+user.id:""}`,newML);
+    if(user&&supabase) DB.saveTargets(user.id,targets,newML);
+  }
+}} lang={lang} onChangeLang={changeLang} onShowProgress={()=>{setSelMeal(null);setTab("progress");}} onOpenPiano={()=>{setSelMeal(null);setSubScreen("piano");}} onOpenImport={()=>{setSelMeal(null);setSubScreen("import");}} onOpenDietLibrary={()=>setShowDietLibrary(true)}/>}
       <BottomNav tab={tab} setTab={setTab} lang={lang} setSubScreen={setSubScreen}/>
     </div>
   );
