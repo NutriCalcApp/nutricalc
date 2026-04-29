@@ -155,8 +155,12 @@ const DB = {
   },
   async saveWeightLog(uid, logs) {
     if (!supabase) return;
-    await supabase.from("weight_logs").delete().eq("user_id",uid);
-    if (logs.length) await supabase.from("weight_logs").insert(logs.map(l=>({user_id:uid,date:l.date,weight:l.weight})));
+    const { error: delErr } = await supabase.from("weight_logs").delete().eq("user_id", uid);
+    if (delErr) { console.error("saveWeightLog delete error:", delErr); return; }
+    if (logs.length) {
+      const { error: insErr } = await supabase.from("weight_logs").insert(logs.map(l=>({user_id:uid,date:l.date,weight:l.weight})));
+      if (insErr) console.error("saveWeightLog insert error:", insErr);
+    }
   },
   async loadWeightLog(uid) { if (!supabase) return []; const { data } = await supabase.from("weight_logs").select("*").eq("user_id",uid).order("date"); return data ? data.map(d=>({date:d.date,weight:d.weight})) : []; },
   async savePantry(uid, items) {
@@ -168,7 +172,7 @@ const DB = {
       if (insErr) throw insErr;
     }
   },
-  async loadPantry(uid) { if (!supabase) return []; const { data } = await supabase.from("pantry").select("*").eq("user_id",uid); return data ? data.map(d=>({id:d.pid||d.id,food:d.food,qty:d.qty,unit:d.unit})) : []; },
+  async loadPantry(uid) { if (!supabase) return []; const { data } = await supabase.from("pantry").select("*").eq("user_id",uid); return data ? data.map(d=>{ const stored=d.food; const full=ALL_FOODS.find(f=>f.name===(stored?.name||stored))||stored; return {id:d.pid||d.id,food:full||stored,qty:d.qty,unit:d.unit}; }) : []; },
   async saveMeals(uid, date, meals) {
     if (!supabase) return;
     const { error } = await supabase.from("meal_logs")
@@ -181,8 +185,12 @@ const DB = {
   async loadMeals(uid, date) { if (!supabase) return null; const { data } = await supabase.from("meal_logs").select("*").eq("user_id",uid).eq("log_date",date).single(); return data ? JSON.parse(data.meals) : null; },
   async saveFavMeals(uid, favs) {
     if (!supabase) return;
-    await supabase.from("fav_meals").delete().eq("user_id",uid);
-    if(favs.length) await supabase.from("fav_meals").insert(favs.map(f=>({user_id:uid,fid:f.id,name:f.name,meal_type:f.mealType,items:JSON.stringify(f.items)})));
+    const { error: delErr } = await supabase.from("fav_meals").delete().eq("user_id", uid);
+    if (delErr) { console.error("saveFavMeals delete error:", delErr); return; }
+    if (favs.length) {
+      const { error: insErr } = await supabase.from("fav_meals").insert(favs.map(f=>({user_id:uid,fid:f.id,name:f.name,meal_type:f.mealType,items:JSON.stringify(f.items)})));
+      if (insErr) console.error("saveFavMeals insert error:", insErr);
+    }
   },
   async loadFavMeals(uid) {
     if (!supabase) return [];
@@ -191,8 +199,12 @@ const DB = {
   },
   async saveCustomFoods(uid, foods) {
     if (!supabase) return;
-    await supabase.from("custom_foods").delete().eq("user_id",uid);
-    if(foods.length) await supabase.from("custom_foods").insert(foods.map(f=>({user_id:uid, food:JSON.stringify(f)})));
+    const { error: delErr } = await supabase.from("custom_foods").delete().eq("user_id", uid);
+    if (delErr) { console.error("saveCustomFoods delete error:", delErr); return; }
+    if (foods.length) {
+      const { error: insErr } = await supabase.from("custom_foods").insert(foods.map(f=>({user_id:uid, food:JSON.stringify(f)})));
+      if (insErr) console.error("saveCustomFoods insert error:", insErr);
+    }
   },
   async loadCustomFoods(uid) {
     if (!supabase) return [];
@@ -4245,7 +4257,7 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
     const existing=pantry.find(it=>it.food.name===food.name);
     let updated;
     if(existing) { updated=pantry.map(it=>it.food.name===food.name?{...it,qty:it.qty+100}:it); }
-    else { updated=[...pantry,{id:Date.now(),food,qty:100,unit:food.unit||"g"}]; }
+    else { const enrichedFood=ALL_FOODS.find(f=>f.name===food.name)||food; updated=[...pantry,{id:Date.now(),food:enrichedFood,qty:100,unit:enrichedFood.unit||"g"}]; }
     // Deduplicazione: rimuovi eventuali duplicati per nome
     const seen=new Set(); 
     updated=updated.filter(it=>{ if(seen.has(it.food.name)) return false; seen.add(it.food.name); return true; });
@@ -4365,7 +4377,7 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
                   <span style={{fontSize:22,opacity:isExhausted?0.45:1}}>{it.food.emoji}</span>
                   <div>
                     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                      <span style={{fontWeight:700,fontSize:14,color:isExhausted?C.mid:C.txt}}>{getFoodName(it.food)}</span>
+                      <span style={{fontWeight:700,fontSize:14,color:isExhausted?C.mid:C.txt}}>{getFoodName(it.food,lang)}</span>
                       {isExhausted&&<span style={{fontSize:10,fontWeight:800,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:6,padding:"1px 6px",letterSpacing:.5}}>ESAURITO</span>}
                       {isLow&&<span style={{fontSize:10,fontWeight:800,color:C.yel,background:`${C.yel}18`,border:`1px solid ${C.yel}44`,borderRadius:6,padding:"1px 6px",letterSpacing:.5}}>⚠ BASSO</span>}
                     </div>
@@ -6272,7 +6284,7 @@ export default function App() {
   useEffect(()=>{
     // Sincronizza database alimenti da Supabase in background
     syncFoodsFromSupabase();
-    if(!supabase){ loadLocal(); setReady(true); return; }
+    if(!supabase){ loadLocal(user?.id); setReady(true); return; }
     // Evita doppia subscription (React StrictMode)
     if(subRef.current) return;
     const {data:{subscription}}=supabase.auth.onAuthStateChange(async(event,sess)=>{
@@ -6344,8 +6356,13 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[lockedMeals,user]);
 
-  const loadLocal=()=>{
-    const pr=LS.g("nc2-profile"), tg=LS.g("nc2-targets"), ml=LS.g("nc2-meallist"), ms=LS.g(`nc2-meals-${today}`), pt=LS.g("nc2-pantry"), wl=LS.g("nc2-weightlog");
+  const loadLocal = (uid) => {
+    const pr = LS.g(`nc2-profile${uid?"-"+uid:""}`) || LS.g("nc2-profile");
+    const tg = LS.g(`nc2-targets${uid?"-"+uid:""}`) || LS.g("nc2-targets");
+    const ml = LS.g(`nc2-meallist${uid?"-"+uid:""}`) || LS.g("nc2-meallist");
+    const ms = LS.g(`nc2-meals${uid?"-"+uid:""}-${today}`) || LS.g(`nc2-meals-${today}`);
+    const pt = LS.g("nc2-pantry");
+    const wl = LS.g("nc2-weightlog");
     if(pr) setProfile(pr);
     if(tg&&ml) { setTargets(tg); setMealList(ml); setMeals(ms||ml.reduce((a,x)=>({...a,[x.name]:[]}),{})); setOnboarded(true); }
     if(pt) setPantry(pt);
