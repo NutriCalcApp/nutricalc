@@ -113,8 +113,8 @@ const LS = {
 
 // SUPABASE LAYER
 const DB = {
-  async saveProfile(uid, d) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, ...d, updated_at:new Date().toISOString() }); },
-  async loadProfile(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("*").eq("id",uid).single(); return data; },
+  async saveProfile(uid, d) { if (!supabase) return; const { error } = await supabase.from("profiles").upsert({ id:uid, ...d, updated_at:new Date().toISOString() }); if (error) console.error("saveProfile error:", error); },
+  async loadProfile(uid) { if (!supabase) return null; const { data, error } = await supabase.from("profiles").select("*").eq("id",uid).single(); if (error && error.code !== 'PGRST116') console.error("loadProfile error:", error); return data || null; },
   async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, weight_skip_date:date, updated_at:new Date().toISOString() }); },
   async loadWeightSkip(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("weight_skip_date").eq("id",uid).single(); return data?.weight_skip_date||null; },
   async saveWeeklyPlan(uid, plan, seed) {
