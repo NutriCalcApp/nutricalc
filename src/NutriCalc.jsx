@@ -3143,7 +3143,7 @@ function SwapFoodModal({mealName, itemIndex, currentItem, pantry, customFoods, l
                       {c.incompatible&&!c.isExhausted&&<span style={{fontSize:9,color:C.red,background:`${C.red}18`,borderRadius:5,padding:"1px 5px"}}>⚠ {c.reason}</span>}
                     </div>
                     <div style={{fontSize:11,color:C.mid,marginTop:1}}>
-                      {c.food.cal} kcal/100g
+                      {c.food.cal} {c.food.unit==="pz"?"kcal/pz":"kcal/100g"}
                       {!c.isExhausted&&<span style={{marginLeft:6,color:C.mid}}>· disp. {c.pantryQty}{c.food.unit||"g"}</span>}
                     </div>
                   </div>
@@ -3345,14 +3345,14 @@ function DietLibraryScreen({weeklyPlan, savedPlans, lang, onApplyPreset, onSaveC
 }
 
 // CREA ALIMENTO
-function CreateFoodScreen({onBack,onSave}) {
+function CreateFoodScreen({onBack,onSave,lang="it"}) {
   const [form,setForm]=useState({name:"",emoji:"🍽️",cal:"",p:"",c:"",f:"",unit:"g"});
   const [err,setErr]=useState("");
   const f=(k,v)=>setForm(prev=>({...prev,[k]:v}));
   const emojis=["🍽️","🥩","🐟","🥚","🥗","🌾","🥛","🥦","🍎","🥜","🫒","🍞","🧀","🫙","🍚","🍝","🥔","📦"];
   const save=()=>{
-    if(!form.name.trim()){setErr("Inserisci il nome dell'alimento.");return;}
-    if(!form.cal||isNaN(form.cal)){setErr("Inserisci le calorie.");return;}
+    if(!form.name.trim()){setErr(lang==="en"?"Enter the food name.":"Inserisci il nome dell'alimento.");return;}
+    if(!form.cal||isNaN(form.cal)){setErr(lang==="en"?"Enter the calories.":"Inserisci le calorie.");return;}
     const food={
       name:form.name.trim(), emoji:form.emoji,
       cal:parseFloat(form.cal)||0, p:parseFloat(form.p)||0,
@@ -3368,8 +3368,8 @@ function CreateFoodScreen({onBack,onSave}) {
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
           <BackBtn onClick={onBack}/>
           <div>
-            <div style={{fontSize:19,fontWeight:800}}>Crea alimento</div>
-            <div style={{fontSize:11,color:C.mid,marginTop:1}}>Valori per 100g/ml · oppure per 1 pezzo (pz)</div>
+            <div style={{fontSize:19,fontWeight:800}}>{lang==="en"?"Create food":"Crea alimento"}</div>
+            <div style={{fontSize:11,color:C.mid,marginTop:1}}>{lang==="en"?"Values per 100g/ml · or per 1 piece (pz)":"Valori per 100g/ml · oppure per 1 pezzo (pz)"}</div>
           </div>
         </div>
         <div style={{marginBottom:16}}>
@@ -3381,11 +3381,11 @@ function CreateFoodScreen({onBack,onSave}) {
           </div>
         </div>
         <div style={{marginBottom:14}}>
-          <Lbl>Nome alimento</Lbl>
-          <input value={form.name} onChange={e=>f("name",e.target.value)} placeholder="es. Pastiera napoletana" style={inp}/>
+          <Lbl>{lang==="en"?"Food name":"Nome alimento"}</Lbl>
+          <input value={form.name} onChange={e=>f("name",e.target.value)} placeholder={lang==="en"?"e.g. Homemade cheesecake":"es. Pastiera napoletana"} style={inp}/>
         </div>
         <div style={{marginBottom:14}}>
-          <Lbl>Unità di misura</Lbl>
+          <Lbl>{lang==="en"?"Unit of measure":"Unità di misura"}</Lbl>
           <div style={{display:"flex",gap:8}}>
             {["g","ml","pz"].map(u=>(
               <button key={u} onClick={()=>f("unit",u)} style={{flex:1,padding:"12px 0",borderRadius:12,border:`2px solid ${form.unit===u?C.acc:C.bord}`,background:form.unit===u?C.aLo:C.surf,color:form.unit===u?C.acc:C.mid,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:14}}>{u}</button>
@@ -3393,8 +3393,8 @@ function CreateFoodScreen({onBack,onSave}) {
           </div>
         </div>
         <div style={{...cS,marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.mid,letterSpacing:1,textTransform:"uppercase",marginBottom:14}}>Valori nutrizionali per {form.unit==="pz"?"1 pezzo":`100 ${form.unit}`}</div>
-          {[["cal","Calorie","kcal"],["p","Proteine","g"],["c","Carboidrati","g"],["f","Grassi","g"]].map(([k,label,unit])=>(
+          <div style={{fontSize:11,fontWeight:700,color:C.mid,letterSpacing:1,textTransform:"uppercase",marginBottom:14}}>{lang==="en"?`Nutritional values per ${form.unit==="pz"?"1 piece":`100 ${form.unit}`}`:`Valori nutrizionali per ${form.unit==="pz"?"1 pezzo":`100 ${form.unit}`}`}</div>
+          {(lang==="en"?[["cal","Calories","kcal"],["p","Protein","g"],["c","Carbs","g"],["f","Fat","g"]]:[["cal","Calorie","kcal"],["p","Proteine","g"],["c","Carboidrati","g"],["f","Grassi","g"]]).map(([k,label,unit])=>(
             <div key={k} style={{marginBottom:12}}>
               <Lbl>{label}</Lbl>
               <div style={{display:"flex",alignItems:"center",background:C.bg,borderRadius:12,border:`1.5px solid ${C.bord}`}}>
@@ -3407,7 +3407,7 @@ function CreateFoodScreen({onBack,onSave}) {
         {err&&<div style={{background:C.rLo,border:`1px solid ${C.red}33`,borderRadius:12,padding:"10px 14px",color:C.red,fontSize:13,marginBottom:16}}>{err}</div>}
         {form.name&&form.cal&&(
           <div style={{...cS,background:C.aLo,border:`1px solid ${C.acc}33`,marginBottom:16}}>
-            <div style={{fontSize:11,color:C.acc,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Anteprima</div>
+            <div style={{fontSize:11,color:C.acc,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>{lang==="en"?"Preview":"Anteprima"}</div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:24}}>{form.emoji}</span>
@@ -3420,7 +3420,7 @@ function CreateFoodScreen({onBack,onSave}) {
             </div>
           </div>
         )}
-        <button onClick={save} style={bP}>Salva alimento</button>
+        <button onClick={save} style={bP}>{lang==="en"?"Save food":"Salva alimento"}</button>
       </div>
     </div>
   );
@@ -3739,8 +3739,8 @@ function FoodSelectorScreen({mealTot,target,pantry,customFoods,lang:fLang,onBack
 
   if(showBarcode) return <BarcodeScanner onClose={()=>setShowBarcode(false)} onDetect={f=>{setShowBarcode(false);onAdd(f);if(onSaveCustomFood) onSaveCustomFood(f);}}/>;
   if(showOnline) return <OnlineSearchScreen onBack={()=>setShowOnline(false)} onSaveToDb={f=>{ if(onSaveCustomFood) onSaveCustomFood(f); else { const cf=customFoods||[]; if(!cf.find(x=>x.name===f.name)){ cf.push(f); LS.s("nc2-customfoods",cf); } } }}/>;
-  if(showCreate) return <CreateFoodScreen onBack={()=>setShowCreate(false)} onSave={f=>{
-    onAdd(f);
+  if(showCreate) return <CreateFoodScreen lang={fLang} onBack={()=>setShowCreate(false)} onSave={f=>{
+    onAdd(f, f.unit==="pz" ? 1 : 100);
     if(onSaveCustomFood) onSaveCustomFood(f);
     else { const cf=customFoods||[]; if(!cf.find(x=>x.name===f.name)){ cf.push(f); LS.s("nc2-customfoods",cf); } }
     setShowCreate(false);
@@ -4290,7 +4290,7 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
   };
 
   if(showAdd) return <FoodSelectorScreen mealTot={{cal:0,p:0,c:0,f:0}} target={{calories:2000,protein:100,carbs:200,fat:70}} pantry={[]} customFoods={customFoods||LS.g("nc2-customfoods")||[]} lang={lang} onBack={()=>setShowAdd(false)} onAdd={addItem}/>;
-  if(showCreate) return <CreateFoodScreen onBack={()=>setShowCreate(false)} onSave={food=>{
+  if(showCreate) return <CreateFoodScreen lang={lang} onBack={()=>setShowCreate(false)} onSave={food=>{
     addItem(food);
     saveCustomFood(food);
     setShowCreate(false);
@@ -5290,7 +5290,7 @@ function DiaryScreen({lang,pantry,customFoods,onBack=null}) {
   const [showPhoto,setShowPhoto]=useState(false);
 
   const save=(list)=>{ setEntries(list); localStorage.setItem(KEY,JSON.stringify(list)); };
-  const addFood=(food)=>{ const updated=[...entries,{id:Date.now(),food,quantity:100}]; save(updated); setShowSel(false); };
+  const addFood=(food,qty=100)=>{ const updated=[...entries,{id:Date.now(),food,quantity:qty}]; save(updated); setShowSel(false); };
   const addPhotoItems=(photoItems)=>{ const newEntries=photoItems.map((item,i)=>({id:Date.now()+i,food:item.food,quantity:item.quantity})); save([...entries,...newEntries]); };
   const removeEntry=(id)=>save(entries.filter(e=>e.id!==id));
   const updateQty=(id,qty)=>save(entries.map(e=>e.id===id?{...e,quantity:Math.max(0,parseInt(qty)||0)}:e));
