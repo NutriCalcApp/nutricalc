@@ -4445,7 +4445,7 @@ function CredenzaScreen({pantry,setPantry,savePantry,lang,user,customFoods,setCu
 // PROGRESS SCREEN
 
 // PIANO ALIMENTARE - piano settimanale 7 giorni
-function MealPlanScreen({weeklyPlan,mealList,targets,lang,onGenerate,onGenerateFromPantry,onReset,onMealClick,onOpenDietLibrary,onBack}) {
+function MealPlanScreen({weeklyPlan,mealList,targets,lang,numMeals,onGenerate,onGenerateFromPantry,onReset,onMealClick,onOpenDietLibrary,onBack}) {
   const DAY_IT=["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"];
   const DAY_EN=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const dayNames=lang==="en"?DAY_EN:DAY_IT;
@@ -4546,7 +4546,7 @@ function MealPlanScreen({weeklyPlan,mealList,targets,lang,onGenerate,onGenerateF
         const mKey=meal.name;
         const items=dayPlan[mKey]||[];
         const tot3=totals(items);
-        const mTgt=mealTarget(targets,mKey,profile.numMeals);
+        const mTgt=mealTarget(targets,mKey,numMeals);
         const recipeName=items[0]?.recipeName;
         return (
           <div key={mKey} onClick={()=>onMealClick&&onMealClick(mKey,selDay,items,mTgt)} style={{...cS,marginBottom:12,cursor:onMealClick?"pointer":"default"}}>
@@ -7115,7 +7115,7 @@ export default function App() {
     <>
       <style>{FONTS}</style>
       <div style={ss}>
-        <MealPlanScreen weeklyPlan={weeklyPlan} mealList={mealList} targets={targets} lang={lang}
+        <MealPlanScreen weeklyPlan={weeklyPlan} mealList={mealList} targets={targets} lang={lang} numMeals={profile.numMeals}
           onGenerate={handleGeneratePlan} onGenerateFromPantry={handleGeneratePlanFromPantry}
           onReset={()=>{ setWeeklyPlan(null); LS.s("nc2-weeklyplan",null); }}
           onMealClick={(mealName,dayIdx,items,target)=>setPlanSelMeal({mealName,dayIdx,items,target})}
@@ -7131,7 +7131,7 @@ export default function App() {
     <>
       <style>{FONTS}</style>
       <div style={ss}>
-        <MealPlanScreen weeklyPlan={weeklyPlan} mealList={mealList} targets={targets} lang={lang}
+        <MealPlanScreen weeklyPlan={weeklyPlan} mealList={mealList} targets={targets} lang={lang} numMeals={profile.numMeals}
           onGenerate={handleGeneratePlan} onGenerateFromPantry={handleGeneratePlanFromPantry}
           onReset={()=>{ setWeeklyPlan(null); LS.s("nc2-weeklyplan",null); }}
           onMealClick={(mealName,dayIdx,items,target)=>setPlanSelMeal({mealName,dayIdx,items,target})}
@@ -7209,7 +7209,7 @@ export default function App() {
         <MealDetailScreen mealName={selMeal} mealData={mealData} items={mealItems} tot={mealTot} target={getMealTarget(selMeal)} pantry={pantry} customFoods={customFoods}
           favMeals={favMeals.filter(f=>f.mealType===selMeal)} lang={lang}
           onBack={()=>setSelMeal(null)} onAdd={f=>addFood(selMeal,f)} onRemove={idx=>removeFood(selMeal,idx)} onQty={(idx,qty)=>updateQty(selMeal,idx,qty)} onUnit={(idx,unit)=>updateUnit(selMeal,idx,unit)} onGenerate={()=>generateMeal(selMeal)} onGenerateDB={()=>generateMealFromDB(selMeal)} onClear={()=>{ const nm={...meals,[selMeal]:[]}; setMeals(nm); saveMeals(nm); }}
-          onRecalc={()=>{ const mTgt=getMealTarget(selMeal); const foods=mealItems.map(it=>it.food); if(!foods.length||!mTgt) return; const qtys=optimize(foods,mTgt); const newItems=foods.map((food,i)=>({food,quantity:qtys[i]})); const nm=buildMealSnapshot(_todayPlanDay,selMeal,newItems); if(weeklyPlan){ const upd=weeklyPlan.map((day,di)=>di===todayPlanIdx?{...day,[selMeal]:newItems}:day); setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd); } setMeals(nm); saveMeals(nm); }}
+          onRecalc={()=>{ const mTgt=mealTarget(targets,selMeal,profile.numMeals); const foods=mealItems.map(it=>it.food); if(!foods.length||!mTgt) return; const qtys=optimize(foods,mTgt); const newItems=foods.map((food,i)=>({food,quantity:qtys[i]})); const nm=buildMealSnapshot(_todayPlanDay,selMeal,newItems); if(weeklyPlan){ const upd=weeklyPlan.map((day,di)=>di===todayPlanIdx?{...day,[selMeal]:newItems}:day); setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd); } setMeals(nm); saveMeals(nm); }}
           onSwap={(idx,newFood,newQty)=>{ const newItems=mealItems.map((it,i)=>i===idx?{food:newFood,quantity:newQty}:it); const nm={...meals,[selMeal]:newItems}; setMeals(nm); saveMeals(nm); }}
           onSaveFav={(name)=>saveFavMeal(selMeal,mealItems,name)} onApplyFav={applyFavMeal} onDeleteFav={deleteFavMeal} onAddItems={items=>addFoodItems(selMeal,items)}
           isConfirmed={!!(confirmedMeals&&confirmedMeals[selMeal])}
