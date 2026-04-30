@@ -4096,7 +4096,7 @@ function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods
           </div>
         )}
         {items.map((item,idx)=>{
-          const x=item.quantity/100;
+          const x=item.quantity/(item.food.unit==="pz"?1:100);
           return (
             <div key={idx} style={cS}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -7260,7 +7260,7 @@ export default function App() {
         <MealDetailScreen mealName={selMeal} mealData={mealData} items={mealItems} tot={mealTot} target={getMealTarget(selMeal)} pantry={pantry} customFoods={customFoods}
           favMeals={favMeals.filter(f=>f.mealType===selMeal)} lang={lang}
           onBack={()=>setSelMeal(null)} onAdd={f=>addFood(selMeal,f)} onRemove={idx=>removeFood(selMeal,idx)} onQty={(idx,qty)=>updateQty(selMeal,idx,qty)} onUnit={(idx,unit)=>updateUnit(selMeal,idx,unit)} onGenerate={()=>generateMeal(selMeal)} onGenerateDB={()=>generateMealFromDB(selMeal)} onClear={()=>{ const nm={...meals,[selMeal]:[]}; setMeals(nm); saveMeals(nm); }}
-          onRecalc={()=>{ const foods=(meals[selMeal]||[]).map(i=>i.food); const items=buildItems(foods,selMeal); const nm={...meals,[selMeal]:items}; setMeals(nm); saveMeals(nm); }}
+          onRecalc={()=>{ const nm=buildMealSnapshot(_todayPlanDay,selMeal,mealItems); setMeals(nm); saveMeals(nm); }}
           onSwap={(idx,newFood,newQty)=>{ const newItems=mealItems.map((it,i)=>i===idx?{food:newFood,quantity:newQty}:it); const nm={...meals,[selMeal]:newItems}; setMeals(nm); saveMeals(nm); }}
           onSaveFav={(name)=>saveFavMeal(selMeal,mealItems,name)} onApplyFav={applyFavMeal} onDeleteFav={deleteFavMeal} onAddItems={items=>addFoodItems(selMeal,items)}
           isConfirmed={!!(confirmedMeals&&confirmedMeals[selMeal])}
