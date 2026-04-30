@@ -2722,8 +2722,7 @@ function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,plan
   const dayName=lang==="en"?DAY_EN[jsDay]:DAY_IT[jsDay];
 
   const planDay = weeklyPlan ? weeklyPlan[dayIdx] : null;
-  const planDayValid = planDay && (!planDay._date || planDay._date === localDateStr());
-  const displayMeals = isCustomized ? meals : (planDayValid ? planDay : meals);
+  const displayMeals = isCustomized ? meals : (planDay || meals);
   const activeMealNamesSet = new Set(mealList.map(m=>m.name));
   const planTot = mealList.length ? totals(Object.entries(displayMeals).filter(([k])=>activeMealNamesSet.has(k)).flatMap(([,v])=>v)) : allTot;
 
@@ -2896,13 +2895,13 @@ function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,plan
 
       {mealList.map((meal,mIdx)=>{
         const {name,icon,time}=meal;
-        const isLocked=lockedMeals&&lockedMeals[name];
-        const items=(isLocked&&(meals[name]||[]).length>0)?meals[name]:(displayMeals[name]||[]);
+        const items=displayMeals[name]||[];
         const tot2=totals(items);
         const cnt=items.length;
         const displayName=_lang==="en"&&meal.nameEn?meal.nameEn:name;
         const mCol=C.mCol(name);
         const isConfirmed=confirmedMeals&&confirmedMeals[name];
+        const isLocked=lockedMeals&&lockedMeals[name];
         return (
           <div key={name} onClick={()=>!isLocked&&onMealClick(name)}
             style={{
@@ -6428,12 +6427,7 @@ export default function App() {
           const todayLogs=nl.filter(l=>l.date===todayStr);
           if(todayLogs.length>0){
             const rebuilt=todayLogs.reduce((acc,l)=>({...acc,[l.mealName]:true}),{});
-            setConfirmedMeals(prev=>{
-              const merged={...rebuilt};
-              // Respect user de-confirmations that happened after wave 3 started
-              if(prev!==null) Object.keys(rebuilt).forEach(m=>{ if(!(m in prev)) delete merged[m]; });
-              return merged;
-            });
+            setConfirmedMeals(rebuilt); LS.s(`nc2-confirmed-${todayStr}`,rebuilt);
           }
           const _lsLogs=LS.g("nc2-nutrition-logs-all");
           if(_lsLogs?.length){
@@ -6452,7 +6446,7 @@ export default function App() {
         else { const lsWp=LS.g("nc2-weeklyplan"); const lsSeed=LS.g("nc2-planseed")||0; if(lsWp){ setWeeklyPlan(lsWp); DB.saveWeeklyPlan(u.id,lsWp,lsSeed).catch(()=>{}); } }
         if(wp?.seed!=null){ setPlanSeed(wp.seed); LS.s("nc2-planseed",wp.seed); }
       }).catch(()=>{}),
-      DB.loadLockedMeals(u.id,_todayStr).then(locked=>{ if(locked&&Object.keys(locked).length){ setLockedMeals(prev=>{ const merged={...locked}; if(prev!==null) Object.keys(locked).forEach(m=>{ if(!(m in prev)) delete merged[m]; }); return merged; }); }}).catch(()=>{}),
+      DB.loadLockedMeals(u.id,_todayStr).then(locked=>{ if(locked&&Object.keys(locked).length){ setLockedMeals(locked); LS.s(`nc2-locked-${_todayStr}`,locked); }}).catch(()=>{}),
       DB.loadSeenIntro(u.id).then(si=>{ if(si){ LS.s("nc2-seen-intro",true); setShowIntro(false); }}).catch(()=>{}),
     ]).catch(e=>console.error("loadUser wave3 error:",e));
   };
@@ -6644,8 +6638,6 @@ export default function App() {
       return dayMeals;
     });
     const todayIdx=(new Date().getDay()+6)%7;
-    const hasUnconfirmedChanges=isCustomized&&mealList.some(m=>(meals[m.name]||[]).length>0&&!(lockedMeals||{})[m.name]);
-    if(hasUnconfirmedChanges){const ok=window.confirm(lang==="en"?"Generating a new plan will clear your unconfirmed changes. Continue?":"Generare un nuovo piano cancellerà le modifiche non confermate. Continuare?");if(!ok)return;}
     const hasLocked=Object.keys(lockedMeals||{}).length>0;
     if(hasLocked){const ok=window.confirm(lang==="en"?"Some meals are confirmed and will be kept. Continue?":"Alcuni pasti sono confermati e verranno mantenuti. Continuare?");if(!ok)return;}
     const protectedMeals=activeMealList.reduce((acc,x)=>{acc[x.name]=(lockedMeals||{})[x.name]?(meals[x.name]||[]):[];return acc;},{});
@@ -6668,8 +6660,6 @@ export default function App() {
 
   const applySavedPlan=(sp)=>{
     const todayIdx=(new Date().getDay()+6)%7;
-    const hasUnconfirmedChanges=isCustomized&&mealList.some(m=>(meals[m.name]||[]).length>0&&!(lockedMeals||{})[m.name]);
-    if(hasUnconfirmedChanges){const ok=window.confirm(lang==="en"?"Generating a new plan will clear your unconfirmed changes. Continue?":"Generare un nuovo piano cancellerà le modifiche non confermate. Continuare?");if(!ok)return;}
     const hasLocked=Object.keys(lockedMeals||{}).length>0;
     if(hasLocked){const ok=window.confirm(lang==="en"?"Some meals are confirmed and will be kept. Continue?":"Alcuni pasti sono confermati e verranno mantenuti. Continuare?");if(!ok)return;}
     const protectedMeals=mealList.reduce((acc,x)=>{acc[x.name]=(lockedMeals||{})[x.name]?(meals[x.name]||[]):[];return acc;},{});
@@ -6685,8 +6675,6 @@ export default function App() {
     const newSeed = validSeed ? seed : ((planSeed + 1) % 7);
     const plan=generateWeeklyPlan(targets,mealList,newSeed,profile.numMeals,profile.excludedFoods||[]);
     const todayIdx=(new Date().getDay()+6)%7;
-    const hasUnconfirmedChanges=isCustomized&&mealList.some(m=>(meals[m.name]||[]).length>0&&!(lockedMeals||{})[m.name]);
-    if(hasUnconfirmedChanges){const ok=window.confirm(lang==="en"?"Generating a new plan will clear your unconfirmed changes. Continue?":"Generare un nuovo piano cancellerà le modifiche non confermate. Continuare?");if(!ok)return;}
     const hasLocked=Object.keys(lockedMeals||{}).length>0;
     if(hasLocked){const ok=window.confirm(lang==="en"?"Some meals are confirmed and will be kept. Continue?":"Alcuni pasti sono confermati e verranno mantenuti. Continuare?");if(!ok)return;}
     const protectedMeals=mealList.reduce((acc,x)=>{acc[x.name]=(lockedMeals||{})[x.name]?(meals[x.name]||[]):[];return acc;},{});
@@ -6704,8 +6692,6 @@ export default function App() {
     const available=pantry.filter(it=>it.qty>0).map(it=>it.food);
     if(!available.length){ alert(lang==="en"?"Pantry is empty. Add foods first.":"La Credenza è vuota. Aggiungi alimenti prima."); return; }
     const todayIdx=(new Date().getDay()+6)%7;
-    const hasUnconfirmedChanges=isCustomized&&mealList.some(m=>(meals[m.name]||[]).length>0&&!(lockedMeals||{})[m.name]);
-    if(hasUnconfirmedChanges){const ok=window.confirm(lang==="en"?"Generating a new plan will clear your unconfirmed changes. Continue?":"Generare un nuovo piano cancellerà le modifiche non confermate. Continuare?");if(!ok)return;}
     const hasLocked=Object.keys(lockedMeals||{}).length>0;
     if(hasLocked){const ok=window.confirm(lang==="en"?"Some meals are confirmed and will be kept. Continue?":"Alcuni pasti sono confermati e verranno mantenuti. Continuare?");if(!ok)return;}
     const newSeed=(planSeed+1)%7;
@@ -6910,7 +6896,7 @@ export default function App() {
     const items=[...baseItems,{food,quantity:initQty}];
     const nm=buildMealSnapshot(planDayNow,name,items);
     if(weeklyPlan){
-      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items,_date:localDateStr()}:day);
+      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
     }
     setMeals(nm); saveMeals(nm); setIsCustomized(true);
@@ -6922,7 +6908,7 @@ export default function App() {
     const merged=[...baseItems,...newItems];
     const nm=buildMealSnapshot(planDayNow,name,merged);
     if(weeklyPlan){
-      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:merged,_date:localDateStr()}:day);
+      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:merged}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
     }
     setMeals(nm); saveMeals(nm); setIsCustomized(true);
@@ -6935,7 +6921,7 @@ export default function App() {
     const items=baseItems.filter((_,i)=>i!==idx);
     const nm=buildMealSnapshot(planDayNow,name,items);
     if(weeklyPlan){
-      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items,_date:localDateStr()}:day);
+      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:items}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
     }
     setMeals(nm); saveMeals(nm); setIsCustomized(true);
@@ -6947,7 +6933,7 @@ export default function App() {
     const u=[...baseItems]; u[idx]={...u[idx],quantity:Math.max(0,parseInt(qty)||0)};
     const nm=buildMealSnapshot(planDayNow,name,u);
     if(weeklyPlan){
-      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u,_date:localDateStr()}:day);
+      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
     }
     setMeals(nm); saveMeals(nm); setIsCustomized(true);
@@ -6960,7 +6946,7 @@ export default function App() {
     u[idx]={...u[idx],food:{...u[idx].food,unit},quantity:def};
     const nm=buildMealSnapshot(planDayNow,name,u);
     if(weeklyPlan){
-      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u,_date:localDateStr()}:day);
+      const upd=weeklyPlan.map((day,di)=>di===todayIdx2?{...day,[name]:u}:day);
       setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd);
     }
     setMeals(nm); saveMeals(nm); setIsCustomized(true);
@@ -7243,7 +7229,7 @@ export default function App() {
         <MealDetailScreen mealName={selMeal} mealData={mealData} items={mealItems} tot={mealTot} target={getMealTarget(selMeal)} pantry={pantry} customFoods={customFoods}
           favMeals={favMeals.filter(f=>f.mealType===selMeal)} lang={lang}
           onBack={()=>setSelMeal(null)} onAdd={f=>addFood(selMeal,f)} onRemove={idx=>removeFood(selMeal,idx)} onQty={(idx,qty)=>updateQty(selMeal,idx,qty)} onUnit={(idx,unit)=>updateUnit(selMeal,idx,unit)} onGenerate={()=>generateMeal(selMeal)} onGenerateDB={()=>generateMealFromDB(selMeal)} onClear={()=>{ const nm={...meals,[selMeal]:[]}; setMeals(nm); saveMeals(nm); }}
-          onRecalc={()=>{ const mTgt=mealTarget(targets,selMeal,profile.numMeals); const foods=mealItems.map(it=>it.food); if(!foods.length||!mTgt) return; const qtys=optimize(foods,mTgt); const newItems=foods.map((food,i)=>({food,quantity:qtys[i]})); const nm=buildMealSnapshot(_todayPlanDay,selMeal,newItems); if(weeklyPlan){ const upd=weeklyPlan.map((day,di)=>di===todayPlanIdx?{...day,[selMeal]:newItems,_date:localDateStr()}:day); setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd); } setMeals(nm); saveMeals(nm); }}
+          onRecalc={()=>{ const mTgt=mealTarget(targets,selMeal,profile.numMeals); const foods=mealItems.map(it=>it.food); if(!foods.length||!mTgt) return; const qtys=optimize(foods,mTgt); const newItems=foods.map((food,i)=>({food,quantity:qtys[i]})); const nm=buildMealSnapshot(_todayPlanDay,selMeal,newItems); if(weeklyPlan){ const upd=weeklyPlan.map((day,di)=>di===todayPlanIdx?{...day,[selMeal]:newItems}:day); setWeeklyPlan(upd); LS.s("nc2-weeklyplan",upd); } setMeals(nm); saveMeals(nm); }}
           onSwap={(idx,newFood,newQty)=>{ const newItems=mealItems.map((it,i)=>i===idx?{food:newFood,quantity:newQty}:it); const nm={...meals,[selMeal]:newItems}; setMeals(nm); saveMeals(nm); }}
           onSaveFav={(name)=>saveFavMeal(selMeal,mealItems,name)} onApplyFav={applyFavMeal} onDeleteFav={deleteFavMeal} onAddItems={items=>addFoodItems(selMeal,items)}
           isConfirmed={!!(confirmedMeals&&confirmedMeals[selMeal])}
@@ -7270,18 +7256,6 @@ export default function App() {
           }
           setIsCustomized(true); setSelMeal(name);
         }} onCustomize={()=>{
-          if(isCustomized){
-            const hasUnsavedChanges=mealList.some(m=>{
-              const mealItems=meals[m.name]||[];
-              const planItems=(_todayPlanDay?.[m.name])||[];
-              return mealItems.length>0&&!(confirmedMeals&&confirmedMeals[m.name])&&
-                     JSON.stringify(mealItems)!==JSON.stringify(planItems);
-            });
-            if(hasUnsavedChanges){
-              const ok=window.confirm(lang==="en"?"You have unsaved changes. Exiting edit mode will hide them (not delete). Continue?":"Hai modifiche non confermate. Uscire dalla modalità modifica le nasconderà (non le elimina). Continuare?");
-              if(!ok) return;
-            }
-          }
           if(!isCustomized&&weeklyPlan){
             const todayIdx2=(new Date().getDay()+6)%7;
             const planDay2=weeklyPlan[todayIdx2];
