@@ -6681,15 +6681,17 @@ export default function App() {
     if(!targets||!mealList.length) return;
     const available=pantry.filter(it=>it.qty>0).map(it=>it.food);
     if(!available.length){ alert(lang==="en"?"Pantry is empty. Add foods first.":"La Credenza è vuota. Aggiungi alimenti prima."); return; }
+    const newSeed=(planSeed+1)%7;
     const plan=[];
     const excl14=profile.excludedFoods||[];
     for(let day=0;day<7;day++){
       const dayMeals={};
+      const rotIdx=(day+newSeed)%7;
       mealList.forEach(meal=>{
         const mKey=meal.name;
         const _pct=meal.pct||(1/mealList.length);
         const mTgt={calories:Math.round(targets.calories*_pct),protein:Math.round(targets.protein*_pct),carbs:Math.round(targets.carbs*_pct),fat:Math.round(targets.fat*_pct)};
-        const foods=(selectPantryFoodsForTarget(mTgt,mKey)||[]).filter(f=>!isExcluded(f.name,excl14));
+        const foods=(selectPantryFoodsForTarget(mTgt,mKey,rotIdx)||[]).filter(f=>!isExcluded(f.name,excl14));
         if(!foods.length){ dayMeals[mKey]=[]; return; }
         const qtys=optimize(foods,mTgt);
         const raw=foods.map((food,i)=>({food,quantity:qtys[i]}));
@@ -6697,6 +6699,8 @@ export default function App() {
       });
       plan.push(dayMeals);
     }
+    setPlanSeed(newSeed);
+    LS.s("nc2-planseed",newSeed);
     setWeeklyPlan(plan);
     LS.s("nc2-weeklyplan",plan);
     setIsCustomized(false);
