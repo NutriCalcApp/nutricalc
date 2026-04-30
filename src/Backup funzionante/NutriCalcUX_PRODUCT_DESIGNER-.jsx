@@ -2445,7 +2445,7 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
     : ["Profilo","Attività","Obiettivo","Pasti","Alimenti","Risultati"];
 
   const next=()=>{
-    const lastDataStep = 5;
+    const lastDataStep = 4;
     if (step===lastDataStep) { const r=calcMacros(profile); setResults(r); }
     setStep(s=>Math.min(s+1, 6));
   };
@@ -2697,7 +2697,7 @@ function WeightModal({profile,onSave,onSkip,lang}) {
           <input type="number" value={w} onChange={e=>setW(e.target.value)} placeholder={profile.weight||"70"} style={{flex:1,background:"none",border:"none",color:C.txt,padding:"16px 18px",fontSize:22,fontWeight:700,outline:"none",fontFamily:ff,textAlign:"center"}} onKeyDown={e=>e.key==="Enter"&&save()}/>
           <span style={{color:C.mid,paddingRight:18,fontSize:16,fontWeight:600}}>kg</span>
         </div>
-        <button onClick={save} disabled={!w} style={{...bP,marginBottom:10,opacity:w?1:.6}} >{w?(lang==="en"?"Save weight":"Salva peso"):(lang==="en"?"Enter weight":"Inserisci il peso")}</button>
+        <button onClick={save} disabled={!w} style={{...bP,marginBottom:10,opacity:w?.6:1}} >{w?(lang==="en"?"Save weight":"Salva peso"):(lang==="en"?"Enter weight":"Inserisci il peso")}</button>
         <button onClick={onSkip} style={{...bS}}>{lang==="en"?"Skip for now":"Salta per ora"}</button>
       </div>
     </div>
@@ -4546,7 +4546,7 @@ function MealPlanScreen({weeklyPlan,mealList,targets,lang,onGenerate,onGenerateF
         const mKey=meal.name;
         const items=dayPlan[mKey]||[];
         const tot3=totals(items);
-        const mTgt=mealTarget(targets,mKey,profile.numMeals);
+        const mTgt=mealTarget(targets,mKey,mealList.length);
         const recipeName=items[0]?.recipeName;
         return (
           <div key={mKey} onClick={()=>onMealClick&&onMealClick(mKey,selDay,items,mTgt)} style={{...cS,marginBottom:12,cursor:onMealClick?"pointer":"default"}}>
@@ -5595,10 +5595,10 @@ function ImportDietScreen({lang,mealList,onApply,onApplyToPlan,onBack}) {
     const dayTotals=totals(allItems); // usa totals() per coerenza con il resto dell'app
 
     const newTargets=dayTotals.cal>500?{
-      calories: Math.min(6000, Math.max(800,  Math.round(dayTotals.cal))),
-      protein:  Math.min(400,  Math.max(10,   Math.round(dayTotals.p))),
-      carbs:    Math.min(800,  Math.max(0,    Math.round(dayTotals.c))),
-      fat:      Math.min(300,  Math.max(0,    Math.round(dayTotals.f))),
+      calories:Math.round(dayTotals.cal),
+      protein: Math.round(dayTotals.p),
+      carbs:   Math.round(dayTotals.c),
+      fat:     Math.round(dayTotals.f),
     }:null;
 
     onApplyToPlan(weekPlan, newTargets);
@@ -6039,6 +6039,87 @@ function DietProgressScreen({targets,nutritionLogs,workoutLogs=[],lang,onBack,on
               </div>
               <div style={{fontSize:11,color:C.mid,marginTop:2}}>
                 {rnd(todayLogsCal)} {lang==="en"?"eaten":"assunte"} − {todayBurned} {lang==="en"?"burned":"bruciate"} = {rnd(net)} kcal {lang==="en"?"net":"nette"}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Sezione allenamento */}
+      <div style={{...cS,marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:showWorkoutInput||workoutLogs.filter(w=>w.date===today).length>0?12:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:18}}>🏋️</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:700}}>{lang==="en"?"Today's workout":"Allenamento di oggi"}</div>
+              {todayBurned>0&&<div style={{fontSize:11,color:"#FF6B6B",fontWeight:700}}>-{todayBurned} kcal {lang==="en"?"burned":"bruciate"}</div>}
+            </div>
+          </div>
+          <button onClick={()=>setShowWorkoutInput(v=>!v)}
+            style={{padding:"7px 14px",background:showWorkoutInput?C.surf:C.aLo,border:`1px solid ${C.acc}44`,borderRadius:12,color:C.acc,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12}}>
+            {showWorkoutInput?(lang==="en"?"Cancel":"Annulla"):`+ ${lang==="en"?"Add":"Aggiungi"}`}
+          </button>
+        </div>
+        {showWorkoutInput&&(
+          <div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+              {WORKOUT_TYPES.map(wt=>(
+                <button key={wt.id} onClick={()=>{setWtype(wt.id);if(wdur) setWkcal(String(Math.round(getWtype(wt.id).kcalMin*(parseFloat(wdur)||0))));}}
+                  style={{padding:"6px 12px",borderRadius:10,border:`2px solid ${wtype===wt.id?C.acc:C.bord}`,background:wtype===wt.id?C.aLo:"transparent",color:wtype===wt.id?C.acc:C.mid,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12}}>
+                  {wt.emoji} {lang==="en"?wt.labelEn:wt.labelIt}
+                </button>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:C.mid,marginBottom:4,fontWeight:600}}>{lang==="en"?"Duration (min)":"Durata (min)"}</div>
+                <input type="number" value={wdur} onChange={e=>{setWdur(e.target.value);setWkcal(String(Math.round(getWtype(wtype).kcalMin*(parseFloat(e.target.value)||0))));}}
+                  placeholder="45" style={{...inp,padding:"10px 12px",fontSize:15}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:C.mid,marginBottom:4,fontWeight:600}}>{lang==="en"?"Burned kcal":"Kcal bruciate"}</div>
+                <input type="number" value={wkcal} onChange={e=>setWkcal(e.target.value)}
+                  placeholder="300" style={{...inp,padding:"10px 12px",fontSize:15}}/>
+              </div>
+            </div>
+            <div style={{fontSize:11,color:C.mid,marginBottom:10,fontStyle:"italic"}}>
+              {lang==="en"?"Edit kcal manually if you have data from your device.":"Modifica le kcal se hai i dati dal tuo dispositivo (orologio, cardiofrequenzimetro)."}
+            </div>
+            <button onClick={()=>{
+              const k=parseFloat(wkcal); if(!k||k<=0) return;
+              onSaveWorkout&&onSaveWorkout(k,wtype,parseFloat(wdur)||0);
+              setShowWorkoutInput(false); setWkcal(""); setWdur("");
+            }} style={{...bP,marginBottom:0}} disabled={!wkcal||parseFloat(wkcal)<=0}>
+              ✓ {lang==="en"?"Save workout":"Salva allenamento"}
+            </button>
+          </div>
+        )}
+        {workoutLogs.filter(w=>w.date===today).map(w=>{
+          const wt=getWtype(w.type);
+          return (
+            <div key={w.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,padding:"8px 12px",background:C.surf,borderRadius:10,border:`1px solid ${C.bord}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:16}}>{wt.emoji}</span>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700}}>{lang==="en"?wt.labelEn:wt.labelIt}{w.duration>0?` · ${w.duration} min`:""}</div>
+                  <div style={{fontSize:11,color:"#FF6B6B",fontWeight:700}}>-{w.kcal} kcal</div>
+                </div>
+              </div>
+              <button onClick={()=>onRemoveWorkout&&onRemoveWorkout(w.id)}
+                style={{background:C.rLo,border:"none",borderRadius:8,padding:"5px 9px",color:C.red,cursor:"pointer",fontFamily:ff,fontSize:13}}>✕</button>
+            </div>
+          );
+        })}
+        {todayBurned>0&&filteredLogs.filter(l=>l.date===today).length>0&&(()=>{
+          const todayLogsCal=sumLogs(filteredLogs.filter(l=>l.date===today)).cal;
+          const net=todayLogsCal-todayBurned;
+          return (
+            <div style={{marginTop:12,padding:"10px 14px",background:net<=(targets?.calories||9999)?C.aLo:C.rLo,borderRadius:10,border:`1px solid ${net<=(targets?.calories||9999)?C.acc:C.red}44`}}>
+              <div style={{fontSize:12,fontWeight:700,color:net<=(targets?.calories||9999)?C.acc:C.red}}>
+                {lang==="en"?"Net calories today:":"Calorie nette oggi:"} {rnd(net)} kcal
+              </div>
+              <div style={{fontSize:11,color:C.mid,marginTop:2}}>
+                {rnd(todayLogsCal)} {lang==="en"?"eaten":"assunte"} − {todayBurned} {lang==="en"?"burned":"bruciate"} = {rnd(net)} kcal
               </div>
             </div>
           );
@@ -6792,7 +6873,7 @@ export default function App() {
     const items=buildItems(bestFoods,name);
     const nm={...meals,[name]:items};
     setMeals(nm); saveMeals(nm);
-    // Toast con nome ricetta usata (pantry deduction happens in confirmMeal, not here)
+    // Toast con nome ricetta usata
     const _mKeyToast=resolveItalianMealKey(name);
     const _recipesT=WEEK_RECIPES[_mKeyToast]||WEEK_RECIPES["Pranzo"];
     const _ratingT=mealRatings||{};
@@ -6806,6 +6887,17 @@ export default function App() {
     _el.textContent='🫙 '+_toastRecipe.name;
     _el.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#0A1318;color:#00E5A0;padding:10px 18px;border-radius:12px;font-weight:700;font-size:13px;border:1px solid #00E5A044;z-index:999;pointer-events:none';
     document.body.appendChild(_el); setTimeout(()=>_el.remove(),2500);
+    // Sottrai le quantità usate dalla credenza
+    const usedQtys={};
+    items.forEach(it=>{ usedQtys[it.food.name]=(usedQtys[it.food.name]||0)+it.quantity; });
+    const updated=pantry.map(it=>{
+      if(usedQtys[it.food.name]) {
+        const remaining=Math.max(0,it.qty-usedQtys[it.food.name]);
+        return remaining>0?{...it,qty:remaining}:null;
+      }
+      return it;
+    }).filter(Boolean);
+    setPantry(updated); savePantry(updated);
   };
 
   const generateMealFromDB=name=>{
@@ -6934,7 +7026,7 @@ export default function App() {
 
   const saveWorkout=(kcal,type,duration)=>{
     const entry={id:Date.now(),date:today,kcal:Math.round(kcal),type,duration};
-    const updated=[...workoutLogs,entry];
+    const updated=[...workoutLogs.filter(w=>!(w.date===today&&w.type===type)),entry];
     setWorkoutLogs(updated); LS.s("nc2-workouts",updated);
     if(user) DB.saveWorkoutLogs(user.id,today,updated.filter(w=>w.date===today)).catch(()=>{});
   };
@@ -6947,10 +7039,8 @@ export default function App() {
     if(user) DB.saveMealRatings(user.id,updated).catch(()=>{});
   };
   const removeWorkout=(id)=>{
-    const removed=workoutLogs.find(w=>w.id===id);
     const updated=workoutLogs.filter(w=>w.id!==id);
     setWorkoutLogs(updated); LS.s("nc2-workouts",updated);
-    if(user&&removed) DB.saveWorkoutLogs(user.id,removed.date,updated.filter(w=>w.date===removed.date)).catch(()=>{});
   };
 
 
@@ -6972,9 +7062,6 @@ export default function App() {
     setFavMeals([]);
     setNutritionLogs([]);
     setConfirmedMeals({});
-    setCustomFoods([]); LS.s("nc2-customfoods",[]);
-    setMealRatings({}); LS.s("nc2-meal-ratings",{});
-    setWorkoutLogs([]); LS.s("nc2-workouts",[]);
   };
   const handleReset=()=>{
     const keys=["nc2-profile","nc2-targets","nc2-meallist","nc2-pantry","nc2-weightlog","nc2-weeklyplan","nc2-planseed"];

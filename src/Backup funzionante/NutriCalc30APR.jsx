@@ -312,7 +312,7 @@ const PRESET_DIETS = [
   {
     id:"keto", name:"Keto", type:"Chetogenica", typeEn:"Ketogenic", emoji:"🥑",
     color:"#D29922", description:"Dieta chetogenica: pochissimi carboidrati, grassi elevati. Il corpo brucia grassi come fonte primaria di energia.", descriptionEn:"Ketogenic diet: very few carbs, high fat. The body burns fat as its primary energy source.",
-    avgCal:1900, macroRatio:{p:15,c:5,f:80},
+    avgCal:1900, macroRatio:{p:25,c:5,f:70},
     patterns:[
       {0:["Uova intere","Avocado","Olio d'oliva"], 1:["Petto di pollo","Zucchine","Olio d'oliva"], 2:["Salmone","Spinaci","Mandorle"], 3:["Noci","Bresaola"]},
       {0:["Albumi","Uova intere","Avocado"], 1:["Tacchino","Cavolfiore","Olio d'oliva"], 2:["Manzo magro","Broccoli","Noci"], 3:["Mandorle","Ricotta magra"]},
@@ -620,7 +620,7 @@ const FOODS = {
     {name:"Fiocchi di cereali (in media)",emoji:"🌾",cal:352.0,p:11.5,c:63.5,f:3.7},
     {name:"Fiocchi di miglio, integrali",emoji:"🌾",cal:360.0,p:10.6,c:68.8,f:3.9},
     {name:"Fiocchi di orzo",emoji:"🌾",cal:333.0,p:8.5,c:66.1,f:1.5},
-    {name:"Galletta di riso integrale",emoji:"🍚",cal:390.0,p:7.7,c:81.5,f:2.8,minQty:10,maxQty:30},
+    {name:"Galletta di riso integrale",emoji:"🍚",cal:390.0,p:7.7,c:81.5,f:2.8},
     {name:"Galletta di riso integrale, con copertura dolce",emoji:"🍚",cal:500.0,p:6.1,c:63.6,f:23.9},
     {name:"Gnocchi di patate, cotti",emoji:"📦",cal:177.0,p:5.0,c:33.6,f:2.1},
     {name:"Grano saraceno, decorticato",emoji:"📦",cal:341.0,p:13.1,c:62.4,f:3.1},
@@ -1284,10 +1284,7 @@ function calcMacros(profile) {
   if(viscLevel==="high"&&goal.val==="gain")      calAdj = Math.min(calAdj,  250); // surplus conservativo
   if(viscLevel==="very_high"&&goal.val==="gain") calAdj = Math.min(calAdj,  150);
 
-  const calFloor = Math.max(Math.round(lbm * 22), profile.gender === "m" ? 1600 : 1400);
-  const rawCal = Math.round(tdee + calAdj);
-  const calFloorActive = rawCal < calFloor;
-  const totalCal = Math.max(calFloor, rawCal);
+  const totalCal = Math.max(1200, Math.round(tdee + calAdj));
 
   // ── PROTEINE su LBM ──────────────────────────────────────────────────────
   // Ricomposizione con BIA: aumenta coeff proteico perché la LBM è nota con precisione
@@ -1303,21 +1300,20 @@ function calcMacros(profile) {
   // WHR alto o viscerale alto → grassi da fonti sane, quota moderata
   let fatCoef = goal.fCoef;
   if(whr>0.95||viscLevel==="very_high") fatCoef = 0.9; // riduce grassi per favorire CH
-  const fatG = Math.max(Math.round(lbm*0.5), Math.min(Math.round(w*fatCoef), Math.round((totalCal*0.35)/9))); // min 0.5g/kg LBM, max 35% kcal
+  const fatG = Math.min(Math.round(w*fatCoef), Math.round((totalCal*0.35)/9)); // max 35% kcal
 
   // ── CARBOIDRATI ──────────────────────────────────────────────────────────
   // Residuo calorico dopo prot+grassi
   // Con visceral alto: abbassa CHO (insulino-resistenza parziale)
   let carbG = Math.max(0, Math.round((totalCal - protG*4 - fatG*9) / 4));
   if(viscLevel==="very_high"&&carbG>150) carbG = Math.round(carbG*0.85); // -15% CHO
-  const carbsWarning = carbG < 50;
 
   return {
     calories:totalCal, protein:protG, carbs:carbG, fat:fatG,
     tdee:Math.round(tdee), bmr:Math.round(bmr),
     lbm:Math.round(lbm*10)/10,
     method: hasBia ? (bmrBia>0 ? "BIA-Direct" : smmKg>0 ? "BIA-SMM" : "BIA-LBM") : (bf>0?"Katch-McArdle":"Mifflin-St Jeor"),
-    viscLevel, whr, smi, calFloorActive, carbsWarning,
+    viscLevel, whr, smi,
   };
 }
 
@@ -1930,21 +1926,9 @@ const NAV_ICONS = {
       <defs><linearGradient id="ng3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor={C.blu}/><stop offset="100%" stopColor={C.pur}/></linearGradient></defs>
     </svg>
   ),
-  diary: (active) => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <rect x="4" y="3" width="14" height="18" rx="2" stroke={active?"url(#ng5)":C.mid} strokeWidth="1.8" fill={active?"url(#ng5)":"none"} fillOpacity={active?.12:0}/>
-      <line x1="8" y1="8" x2="14" y2="8" stroke={active?"url(#ng5)":C.mid} strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="8" y1="12" x2="14" y2="12" stroke={active?"url(#ng5)":C.mid} strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="8" y1="16" x2="11" y2="16" stroke={active?"url(#ng5)":C.mid} strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="18" cy="18" r="4" fill={active?"url(#ng5)":C.mid} fillOpacity={active?1:.6}/>
-      <line x1="18" y1="16" x2="18" y2="18" stroke="#0D1117" strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="18" cy="19.5" r=".6" fill="#0D1117"/>
-      <defs><linearGradient id="ng5" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor={C.ora}/><stop offset="100%" stopColor={C.yel}/></linearGradient></defs>
-    </svg>
-  ),
 };
 function BottomNav({tab,setTab,lang,setSubScreen}) {
-  const tabs=[["today",t("today",lang)],["piano",t("pianoTab",lang)],["diary",t("diaryTab",lang)],["credenza",t("pantryTab",lang)],["profile",t("profile",lang)]];
+  const tabs=[["today",t("today",lang)],["piano",t("pianoTab",lang)],["progress",t("progress",lang)],["credenza",t("pantryTab",lang)],["profile",t("profile",lang)]];
   return (
     <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:`rgba(13,20,34,.92)`,borderTop:`1px solid ${C.bord}`,display:"flex",padding:"10px 4px 24px",zIndex:50,backdropFilter:"blur(20px)"}}>
       {tabs.map(([id,lbl])=>{
@@ -1973,11 +1957,11 @@ function BottomNav({tab,setTab,lang,setSubScreen}) {
 }
 const LANG = {
   it: {
-    today:"Oggi", progress:"Progressi", pantryTab:"Credenza", profile:"Profilo", diaryTab:"Diario",
+    today:"Oggi", progress:"Progressi", pantryTab:"Credenza", profile:"Profilo",
     pianoTab:"Piano", pianoTitle:"Piano Alimentare", pianoSubtitle:"7 giorni · macro calibrati",
     generatePlan:"Genera piano settimanale", regenPlan:"🔄 Rigenera",
     noPlan:"Nessun piano generato", noPlanDesc:"Genera il piano settimanale basato sui tuoi macro e sui cibi a migliore qualità nutrizionale.",
-    personalizza:"📝 Modifica giorno", personalizzaOn:"✓ Modificato",
+    personalizza:"✏️ Personalizza", personalizzaOn:"✓ Personalizzato",
     pianoToday:"Piano di oggi", viewPlan:"Vedi piano",
     diary:"Diario", diaryTitle:"Diario alimentare", diaryReset:"Resetta diario",
     calories:"Calorie", protein:"Proteine", carbs:"Carboidrati", fat:"Grassi",
@@ -2051,11 +2035,11 @@ const LANG = {
     caloriesTarget:"Obiettivo calorico",
   },
   en: {
-    today:"Today", progress:"Progress", pantryTab:"Pantry", profile:"Profile", diaryTab:"Diary",
+    today:"Today", progress:"Progress", pantryTab:"Pantry", profile:"Profile",
     pianoTab:"Plan", pianoTitle:"Meal Plan", pianoSubtitle:"7 days · calibrated macros",
     generatePlan:"Generate weekly plan", regenPlan:"🔄 Regenerate",
     noPlan:"No plan generated", noPlanDesc:"Generate a weekly plan based on your macros and best-quality foods.",
-    personalizza:"📝 Edit today", personalizzaOn:"✓ Edited",
+    personalizza:"✏️ Customize", personalizzaOn:"✓ Customized",
     pianoToday:"Today's plan", viewPlan:"View plan",
     diary:"Diary", diaryTitle:"Food diary", diaryReset:"Reset diary",
     calories:"Calories", protein:"Protein", carbs:"Carbs", fat:"Fat",
@@ -2445,7 +2429,7 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
     : ["Profilo","Attività","Obiettivo","Pasti","Alimenti","Risultati"];
 
   const next=()=>{
-    const lastDataStep = 5;
+    const lastDataStep = 4;
     if (step===lastDataStep) { const r=calcMacros(profile); setResults(r); }
     setStep(s=>Math.min(s+1, 6));
   };
@@ -2619,27 +2603,17 @@ function OnboardingScreen({user,onComplete,isNewUser}) {
                 ))}
               </div>
             </div>
-            {(()=>{
-              const cfg=MEAL_CONFIGS[profile.numMeals]||MEAL_CONFIGS[3];
-              const main=cfg.reduce((a,b)=>b.pct>a.pct?b:a);
-              const mt=mealTarget(results,main.name,profile.numMeals);
-              const mLabel=selLang==="en"?main.nameEn:main.name;
-              return (
-                <div style={{...cS,background:C.bLo,border:`1px solid ${C.blu}33`}}>
-                  <div style={{fontSize:11,fontWeight:700,color:C.blu+"88",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>{selLang==="en"?`Main meal · ${mLabel}`:`Pasto principale · ${mLabel}`}</div>
-                  <div style={{display:"flex",justifyContent:"space-between"}}>
-                    {[["kcal",mt.calories,C.txt],["Prot",mt.protein+"g",C.acc],["Carbo",mt.carbs+"g",C.blu],["Grassi",mt.fat+"g",C.ora]].map(([l,v,c])=>(
-                      <div key={l} style={{textAlign:"center"}}>
-                        <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div>
-                        <div style={{fontSize:11,color:C.mid,marginTop:2}}>{l}</div>
-                      </div>
-                    ))}
+            <div style={{...cS,background:C.bLo,border:`1px solid ${C.blu}33`}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.blu+"88",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Per pasto ({profile.numMeals} pasti)</div>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                {(()=>{const f=1/profile.numMeals;return[["kcal",Math.round(results.calories*f),C.txt],["Prot",Math.round(results.protein*f)+"g",C.acc],["Carbo",Math.round(results.carbs*f)+"g",C.blu],["Grassi",Math.round(results.fat*f)+"g",C.ora]];})().map(([l,v,c])=>(
+                  <div key={l} style={{textAlign:"center"}}>
+                    <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div>
+                    <div style={{fontSize:11,color:C.mid,marginTop:2}}>{l}</div>
                   </div>
-                </div>
-              );
-            })()}
-            {results.calFloorActive&&<div style={{background:`${C.yel}18`,border:`1px solid ${C.yel}44`,borderRadius:12,padding:"10px 14px",color:C.yel,fontSize:12,marginTop:8}}>⚠️ {selLang==="en"?"Your calorie target has been raised to meet the safe minimum for your body size. Consider consulting a healthcare professional.":"Il target calorico è stato alzato al minimo sicuro per la tua corporatura. Considera di consultare un professionista della salute."}</div>}
-            {results.carbsWarning&&<div style={{background:`${C.ora}18`,border:`1px solid ${C.ora}44`,borderRadius:12,padding:"10px 14px",color:C.ora,fontSize:12,marginTop:8}}>⚠️ {selLang==="en"?"Carbohydrate target is very low (<50g). This may cause fatigue. Consider increasing total calories or reducing protein.":"Target carboidrati molto basso (<50g). Potrebbe causare affaticamento. Considera di aumentare le calorie totali o ridurre le proteine."}</div>}
+                ))}
+              </div>
+            </div>
             {/* Selezione protocollo opzionale */}
             <div style={{marginTop:20}}>
               <div style={{fontSize:13,fontWeight:700,color:C.mid,marginBottom:12,letterSpacing:.5}}>
@@ -2697,7 +2671,7 @@ function WeightModal({profile,onSave,onSkip,lang}) {
           <input type="number" value={w} onChange={e=>setW(e.target.value)} placeholder={profile.weight||"70"} style={{flex:1,background:"none",border:"none",color:C.txt,padding:"16px 18px",fontSize:22,fontWeight:700,outline:"none",fontFamily:ff,textAlign:"center"}} onKeyDown={e=>e.key==="Enter"&&save()}/>
           <span style={{color:C.mid,paddingRight:18,fontSize:16,fontWeight:600}}>kg</span>
         </div>
-        <button onClick={save} disabled={!w} style={{...bP,marginBottom:10,opacity:w?1:.6}} >{w?(lang==="en"?"Save weight":"Salva peso"):(lang==="en"?"Enter weight":"Inserisci il peso")}</button>
+        <button onClick={save} disabled={!w} style={{...bP,marginBottom:10,opacity:w?.6:1}} >{w?(lang==="en"?"Save weight":"Salva peso"):(lang==="en"?"Enter weight":"Inserisci il peso")}</button>
         <button onClick={onSkip} style={{...bS}}>{lang==="en"?"Skip for now":"Salta per ora"}</button>
       </div>
     </div>
@@ -2708,7 +2682,6 @@ function WeightModal({profile,onSave,onSkip,lang}) {
 function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,planMealTargets,profile,lang,weightLog,confirmedMeals,lockedMeals,onConfirmMeal,onUnlockMeal,onMealClick,onCustomize,onRegenFromPantry,onWeightUpdate,onPhotoMeal,pantry,customFoods,onSwapFood,onOpenPiano,onOpenImport,onOpenDiary}) {
   const [swapModal,setSwapModal]=useState(null); // {mealName, itemIndex, item}
   const [fabOpen,setFabOpen]=useState(false);
-  const [chipDismissed,setChipDismissed]=useState(()=>!!LS.g("nc2-today-chip-seen"));
   useEffect(()=>{ return ()=>setFabOpen(false); },[]);
   // Chiudi il FAB quando TodayScreen viene rimontato o perde focus
   useEffect(()=>{ setFabOpen(false); },[]);
@@ -2810,12 +2783,6 @@ function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,plan
           </div>
         )}
       </div>
-
-      {!chipDismissed&&<div style={{background:`${C.acc}12`,border:`1px solid ${C.acc}33`,borderRadius:14,padding:"11px 14px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:10}}>
-        <span style={{fontSize:16,flexShrink:0}}>💡</span>
-        <div style={{flex:1,fontSize:12,color:C.txt,lineHeight:1.5}}>{lang==="en"?"These are today's planned meals. Tap a meal to view or edit it. Use \"📝 Edit today\" to log your own meals instead.":"Questi sono i pasti pianificati per oggi. Tocca un pasto per vederlo o modificarlo. Usa \"📝 Modifica giorno\" per inserire i tuoi pasti liberamente."}</div>
-        <button onClick={()=>{setChipDismissed(true);LS.s("nc2-today-chip-seen",true);}} style={{background:"none",border:"none",color:C.mid,cursor:"pointer",fontSize:16,padding:"0 4px",flexShrink:0,fontFamily:ff}}>✕</button>
-      </div>}
 
       {/* CALORIE HERO CARD */}
       <div style={{
@@ -2960,7 +2927,7 @@ function TodayScreen({targets,mealList,meals,weeklyPlan,isCustomized,allTot,plan
                         <span style={{fontSize:11,color:mCol,fontWeight:800}}>{rnd(item.food.cal*x2)}</span>
                         {!isLocked&&<button
                           onClick={e=>{e.stopPropagation();setSwapModal({mealName:name,itemIndex:i,item});}}
-                          style={{width:40,height:40,borderRadius:8,background:"rgba(255,255,255,.06)",border:`1px solid ${C.bord2}`,color:C.mid,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:ff,flexShrink:0}}
+                          style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,.06)",border:`1px solid ${C.bord2}`,color:C.mid,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:ff,flexShrink:0}}
                         >⇄</button>}
                       </div>
                     </div>
@@ -4177,8 +4144,6 @@ function MealDetailScreen({mealName,mealData,items,tot,target,pantry,customFoods
           <button onClick={()=>!isLocked&&setShowSel(true)} style={{flex:2,minWidth:0,padding:"12px 10px",background:isLocked?C.surf:C.acc,color:isLocked?C.mid:"#0D1117",border:isLocked?`1.5px solid ${C.bord}`:"none",borderRadius:14,fontWeight:700,fontSize:13,cursor:isLocked?"not-allowed":"pointer",fontFamily:ff,opacity:isLocked?0.5:1}}>{isLocked?"🔒":" "}{t("addFood2",lang)}</button>
           <button onClick={()=>setShowPhoto(true)} style={{padding:"10px 12px",background:C.bLo,border:`1px solid ${C.blu}33`,borderRadius:14,color:C.blu,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:13,flexShrink:0}}>📷</button>
           {items.length>0&&!isConfirmed&&<button onClick={onRecalc} style={{padding:"10px 12px",background:C.bLo,border:`1px solid ${C.blu}33`,borderRadius:14,color:C.blu,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12,flexShrink:0}}>{t("recalc",lang)}</button>}
-          {items.length>0&&!isConfirmed&&!isLocked&&<button onClick={onUnconfirm} style={{padding:"10px 14px",background:`linear-gradient(135deg,${C.acc},${C.blu})`,border:"none",borderRadius:14,color:"#0D1117",fontWeight:800,cursor:"pointer",fontFamily:ff,fontSize:12,flexShrink:0}}>✓ {lang==="en"?"Confirm":"Conferma"}</button>}
-          {items.length>0&&isConfirmed&&<div style={{padding:"10px 14px",background:`${C.acc}18`,border:`1px solid ${C.acc}44`,borderRadius:14,color:C.acc,fontWeight:700,fontSize:12,flexShrink:0}}>✓ {lang==="en"?"Confirmed":"Confermato"}</div>}
           {items.length>0&&<SaveMealBtn onSave={onSaveFav} lang={lang} showLabel={true}/>}
         </div>
         {favMeals&&favMeals.length>0&&(
@@ -4546,7 +4511,7 @@ function MealPlanScreen({weeklyPlan,mealList,targets,lang,onGenerate,onGenerateF
         const mKey=meal.name;
         const items=dayPlan[mKey]||[];
         const tot3=totals(items);
-        const mTgt=mealTarget(targets,mKey,profile.numMeals);
+        const mTgt=mealTarget(targets,mKey,mealList.length);
         const recipeName=items[0]?.recipeName;
         return (
           <div key={mKey} onClick={()=>onMealClick&&onMealClick(mKey,selDay,items,mTgt)} style={{...cS,marginBottom:12,cursor:onMealClick?"pointer":"default"}}>
@@ -5595,10 +5560,10 @@ function ImportDietScreen({lang,mealList,onApply,onApplyToPlan,onBack}) {
     const dayTotals=totals(allItems); // usa totals() per coerenza con il resto dell'app
 
     const newTargets=dayTotals.cal>500?{
-      calories: Math.min(6000, Math.max(800,  Math.round(dayTotals.cal))),
-      protein:  Math.min(400,  Math.max(10,   Math.round(dayTotals.p))),
-      carbs:    Math.min(800,  Math.max(0,    Math.round(dayTotals.c))),
-      fat:      Math.min(300,  Math.max(0,    Math.round(dayTotals.f))),
+      calories:Math.round(dayTotals.cal),
+      protein: Math.round(dayTotals.p),
+      carbs:   Math.round(dayTotals.c),
+      fat:     Math.round(dayTotals.f),
     }:null;
 
     onApplyToPlan(weekPlan, newTargets);
@@ -6039,6 +6004,87 @@ function DietProgressScreen({targets,nutritionLogs,workoutLogs=[],lang,onBack,on
               </div>
               <div style={{fontSize:11,color:C.mid,marginTop:2}}>
                 {rnd(todayLogsCal)} {lang==="en"?"eaten":"assunte"} − {todayBurned} {lang==="en"?"burned":"bruciate"} = {rnd(net)} kcal {lang==="en"?"net":"nette"}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Sezione allenamento */}
+      <div style={{...cS,marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:showWorkoutInput||workoutLogs.filter(w=>w.date===today).length>0?12:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:18}}>🏋️</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:700}}>{lang==="en"?"Today's workout":"Allenamento di oggi"}</div>
+              {todayBurned>0&&<div style={{fontSize:11,color:"#FF6B6B",fontWeight:700}}>-{todayBurned} kcal {lang==="en"?"burned":"bruciate"}</div>}
+            </div>
+          </div>
+          <button onClick={()=>setShowWorkoutInput(v=>!v)}
+            style={{padding:"7px 14px",background:showWorkoutInput?C.surf:C.aLo,border:`1px solid ${C.acc}44`,borderRadius:12,color:C.acc,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12}}>
+            {showWorkoutInput?(lang==="en"?"Cancel":"Annulla"):`+ ${lang==="en"?"Add":"Aggiungi"}`}
+          </button>
+        </div>
+        {showWorkoutInput&&(
+          <div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+              {WORKOUT_TYPES.map(wt=>(
+                <button key={wt.id} onClick={()=>{setWtype(wt.id);if(wdur) setWkcal(String(Math.round(getWtype(wt.id).kcalMin*(parseFloat(wdur)||0))));}}
+                  style={{padding:"6px 12px",borderRadius:10,border:`2px solid ${wtype===wt.id?C.acc:C.bord}`,background:wtype===wt.id?C.aLo:"transparent",color:wtype===wt.id?C.acc:C.mid,fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:12}}>
+                  {wt.emoji} {lang==="en"?wt.labelEn:wt.labelIt}
+                </button>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:C.mid,marginBottom:4,fontWeight:600}}>{lang==="en"?"Duration (min)":"Durata (min)"}</div>
+                <input type="number" value={wdur} onChange={e=>{setWdur(e.target.value);setWkcal(String(Math.round(getWtype(wtype).kcalMin*(parseFloat(e.target.value)||0))));}}
+                  placeholder="45" style={{...inp,padding:"10px 12px",fontSize:15}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:C.mid,marginBottom:4,fontWeight:600}}>{lang==="en"?"Burned kcal":"Kcal bruciate"}</div>
+                <input type="number" value={wkcal} onChange={e=>setWkcal(e.target.value)}
+                  placeholder="300" style={{...inp,padding:"10px 12px",fontSize:15}}/>
+              </div>
+            </div>
+            <div style={{fontSize:11,color:C.mid,marginBottom:10,fontStyle:"italic"}}>
+              {lang==="en"?"Edit kcal manually if you have data from your device.":"Modifica le kcal se hai i dati dal tuo dispositivo (orologio, cardiofrequenzimetro)."}
+            </div>
+            <button onClick={()=>{
+              const k=parseFloat(wkcal); if(!k||k<=0) return;
+              onSaveWorkout&&onSaveWorkout(k,wtype,parseFloat(wdur)||0);
+              setShowWorkoutInput(false); setWkcal(""); setWdur("");
+            }} style={{...bP,marginBottom:0}} disabled={!wkcal||parseFloat(wkcal)<=0}>
+              ✓ {lang==="en"?"Save workout":"Salva allenamento"}
+            </button>
+          </div>
+        )}
+        {workoutLogs.filter(w=>w.date===today).map(w=>{
+          const wt=getWtype(w.type);
+          return (
+            <div key={w.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,padding:"8px 12px",background:C.surf,borderRadius:10,border:`1px solid ${C.bord}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:16}}>{wt.emoji}</span>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700}}>{lang==="en"?wt.labelEn:wt.labelIt}{w.duration>0?` · ${w.duration} min`:""}</div>
+                  <div style={{fontSize:11,color:"#FF6B6B",fontWeight:700}}>-{w.kcal} kcal</div>
+                </div>
+              </div>
+              <button onClick={()=>onRemoveWorkout&&onRemoveWorkout(w.id)}
+                style={{background:C.rLo,border:"none",borderRadius:8,padding:"5px 9px",color:C.red,cursor:"pointer",fontFamily:ff,fontSize:13}}>✕</button>
+            </div>
+          );
+        })}
+        {todayBurned>0&&filteredLogs.filter(l=>l.date===today).length>0&&(()=>{
+          const todayLogsCal=sumLogs(filteredLogs.filter(l=>l.date===today)).cal;
+          const net=todayLogsCal-todayBurned;
+          return (
+            <div style={{marginTop:12,padding:"10px 14px",background:net<=(targets?.calories||9999)?C.aLo:C.rLo,borderRadius:10,border:`1px solid ${net<=(targets?.calories||9999)?C.acc:C.red}44`}}>
+              <div style={{fontSize:12,fontWeight:700,color:net<=(targets?.calories||9999)?C.acc:C.red}}>
+                {lang==="en"?"Net calories today:":"Calorie nette oggi:"} {rnd(net)} kcal
+              </div>
+              <div style={{fontSize:11,color:C.mid,marginTop:2}}>
+                {rnd(todayLogsCal)} {lang==="en"?"eaten":"assunte"} − {todayBurned} {lang==="en"?"burned":"bruciate"} = {rnd(net)} kcal
               </div>
             </div>
           );
@@ -6792,7 +6838,7 @@ export default function App() {
     const items=buildItems(bestFoods,name);
     const nm={...meals,[name]:items};
     setMeals(nm); saveMeals(nm);
-    // Toast con nome ricetta usata (pantry deduction happens in confirmMeal, not here)
+    // Toast con nome ricetta usata
     const _mKeyToast=resolveItalianMealKey(name);
     const _recipesT=WEEK_RECIPES[_mKeyToast]||WEEK_RECIPES["Pranzo"];
     const _ratingT=mealRatings||{};
@@ -6806,6 +6852,17 @@ export default function App() {
     _el.textContent='🫙 '+_toastRecipe.name;
     _el.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#0A1318;color:#00E5A0;padding:10px 18px;border-radius:12px;font-weight:700;font-size:13px;border:1px solid #00E5A044;z-index:999;pointer-events:none';
     document.body.appendChild(_el); setTimeout(()=>_el.remove(),2500);
+    // Sottrai le quantità usate dalla credenza
+    const usedQtys={};
+    items.forEach(it=>{ usedQtys[it.food.name]=(usedQtys[it.food.name]||0)+it.quantity; });
+    const updated=pantry.map(it=>{
+      if(usedQtys[it.food.name]) {
+        const remaining=Math.max(0,it.qty-usedQtys[it.food.name]);
+        return remaining>0?{...it,qty:remaining}:null;
+      }
+      return it;
+    }).filter(Boolean);
+    setPantry(updated); savePantry(updated);
   };
 
   const generateMealFromDB=name=>{
@@ -6934,7 +6991,7 @@ export default function App() {
 
   const saveWorkout=(kcal,type,duration)=>{
     const entry={id:Date.now(),date:today,kcal:Math.round(kcal),type,duration};
-    const updated=[...workoutLogs,entry];
+    const updated=[...workoutLogs.filter(w=>!(w.date===today&&w.type===type)),entry];
     setWorkoutLogs(updated); LS.s("nc2-workouts",updated);
     if(user) DB.saveWorkoutLogs(user.id,today,updated.filter(w=>w.date===today)).catch(()=>{});
   };
@@ -6947,10 +7004,8 @@ export default function App() {
     if(user) DB.saveMealRatings(user.id,updated).catch(()=>{});
   };
   const removeWorkout=(id)=>{
-    const removed=workoutLogs.find(w=>w.id===id);
     const updated=workoutLogs.filter(w=>w.id!==id);
     setWorkoutLogs(updated); LS.s("nc2-workouts",updated);
-    if(user&&removed) DB.saveWorkoutLogs(user.id,removed.date,updated.filter(w=>w.date===removed.date)).catch(()=>{});
   };
 
 
@@ -6972,9 +7027,6 @@ export default function App() {
     setFavMeals([]);
     setNutritionLogs([]);
     setConfirmedMeals({});
-    setCustomFoods([]); LS.s("nc2-customfoods",[]);
-    setMealRatings({}); LS.s("nc2-meal-ratings",{});
-    setWorkoutLogs([]); LS.s("nc2-workouts",[]);
   };
   const handleReset=()=>{
     const keys=["nc2-profile","nc2-targets","nc2-meallist","nc2-pantry","nc2-weightlog","nc2-weeklyplan","nc2-planseed"];
@@ -7190,13 +7242,12 @@ export default function App() {
     </>
   );
 
-  if(subScreen==="diary"||tab==="diary") return (
+  if(subScreen==="diary") return (
     <>
       <style>{FONTS}</style>
       <div style={ss}>
-        <DiaryScreen lang={lang} pantry={pantry} customFoods={customFoods} onBack={()=>{ subScreen==="diary"?setSubScreen(null):setTab("today"); }}/>
+        <DiaryScreenWithBack lang={lang} pantry={pantry} customFoods={customFoods} onBack={()=>setSubScreen(null)}/>
       </div>
-      {tab==="diary"&&<BottomNav tab={tab} setTab={setTab} lang={lang} setSubScreen={setSubScreen}/>}
     </>
   );
 
