@@ -37,13 +37,10 @@ const supabase = (() => {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
-      lock: (() => {
-        let _lockQueue = Promise.resolve();
-        return async (name, acquireTimeout, fn) => {
-          _lockQueue = _lockQueue.then(() => fn()).catch(() => {});
-          return _lockQueue;
-        };
-      })(),
+      lock: async (name, acquireTimeout, fn) => {
+        // Bypass navigator.locks - esegui direttamente senza lock
+        return await fn();
+      },
     },
   });
   window[_sbKey] = client;
@@ -4482,7 +4479,7 @@ function MealPlanScreen({weeklyPlan,mealList,targets,lang,numMeals,onGenerate,on
   const dayPlan=weeklyPlan[selDay]||{};
 
   // Totale giornaliero del giorno selezionato
-  const dayTot = totals(Object.values(dayPlan).filter(Array.isArray).flat());
+  const dayTot = totals(Object.values(dayPlan).flat());
 
   return (
     <div style={{...ss,overflowY:"auto",paddingBottom:70}}>
@@ -6265,14 +6262,10 @@ export default function App() {
 
   // Controlla peso ogni volta che l'app torna in foreground
   useEffect(()=>{
-    const handleVisibility=async()=>{
+    const handleVisibility=()=>{
       if(document.visibilityState==="visible"){
         const wl=LS.g("nc2-weightlog")||[];
         checkWeightPrompt(wl);
-        if(supabase){
-          const {data:{session}}=await supabase.auth.getSession();
-          if(!session&&user){ setUser(null); setOnboarded(false); }
-        }
       }
     };
     document.addEventListener("visibilitychange",handleVisibility);
