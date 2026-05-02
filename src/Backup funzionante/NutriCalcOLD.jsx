@@ -6239,8 +6239,6 @@ export default function App() {
 
   const loadingRef=useRef(false);
   const subRef=useRef(null);
-  const userRef=useRef(null);
-  useEffect(()=>{ userRef.current=user; },[user]);
   useEffect(()=>{
     // Sincronizza database alimenti da Supabase in background
     syncFoodsFromSupabase();
@@ -6249,7 +6247,6 @@ export default function App() {
     if(subRef.current) return;
     const {data:{subscription}}=supabase.auth.onAuthStateChange(async(event,sess)=>{
       if(event==="SIGNED_OUT"){
-        loadingRef.current=false;
         setUser(null); setOnboarded(false);
         setProfile({name:"",gender:"m",age:"",weight:"",height:"",bodyFat:"",activity:1.55,goal:"lose",numMeals:3,excludedFoods:[],bia_fm:"",bia_vf:"",bia_bmr:"",bia_ffm:"",bia_sc_fat:"",bia_smi:"",bia_whr:"",bia_smm:""});
         setTargets(null); setMealList([]); setMeals({}); setPantry([]); setWeightLog([]);
@@ -6262,7 +6259,8 @@ export default function App() {
         if(loadingRef.current) return;
         loadingRef.current=true;
         setReady(false);
-        try { await loadUser(sess.user); } finally { loadingRef.current=false; }
+        await loadUser(sess.user);
+        loadingRef.current=false;
       } else if(!loadingRef.current) {
         setReady(true);
       }
@@ -6281,19 +6279,15 @@ export default function App() {
         const wl=LS.g("nc2-weightlog")||[];
         checkWeightPrompt(wl);
         if(supabase){
-          try {
-            const sessionPromise=supabase.auth.getSession();
-            const timeoutPromise=new Promise(resolve=>setTimeout(()=>resolve({data:{session:null}}),5000));
-            const {data:{session}}=await Promise.race([sessionPromise,timeoutPromise]);
-            if(!session&&userRef.current){ setUser(null); setOnboarded(false); }
-          } catch(e){ console.warn("visibilitychange getSession error:",e); }
+          const {data:{session}}=await supabase.auth.getSession();
+          if(!session&&user){ setUser(null); setOnboarded(false); }
         }
       }
     };
     document.addEventListener("visibilitychange",handleVisibility);
     return ()=>document.removeEventListener("visibilitychange",handleVisibility);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  },[weightLog]);
 
   // Bug 7 fix: azzera confirmedMeals al cambio di giorno (app aperta attraverso mezzanotte)
   useEffect(()=>{
