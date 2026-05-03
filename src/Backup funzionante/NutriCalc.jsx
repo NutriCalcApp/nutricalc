@@ -37,10 +37,13 @@ const supabase = (() => {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
-      lock: async (name, acquireTimeout, fn) => {
-        // Bypass navigator.locks - esegui direttamente senza lock
-        return await fn();
-      },
+      lock: (() => {
+        let _lockQueue = Promise.resolve();
+        return async (name, acquireTimeout, fn) => {
+          _lockQueue = _lockQueue.then(() => fn()).catch(() => {});
+          return _lockQueue;
+        };
+      })(),
     },
   });
   window[_sbKey] = client;
@@ -115,7 +118,7 @@ const LS = {
 const DB = {
   async saveProfile(uid, d) { if (!supabase) return; const { error } = await supabase.from("profiles").upsert({ id:uid, ...d, updated_at:new Date().toISOString() }); if (error) console.error("saveProfile error:", error); },
   async loadProfile(uid) { if (!supabase) return null; const { data, error } = await supabase.from("profiles").select("*").eq("id",uid).single(); if (error && error.code !== 'PGRST116') console.error("loadProfile error:", error); return data || null; },
-  async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, weight_skip_date:date, updated_at:new Date().toISOString() }); },
+  async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").update({ weight_skip_date:date, updated_at:new Date().toISOString() }).eq("id",uid); },
   async loadWeightSkip(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("weight_skip_date").eq("id",uid).single(); return data?.weight_skip_date||null; },
   async saveWeeklyPlan(uid, plan, seed) {
     if (!supabase) return;
@@ -137,7 +140,7 @@ const DB = {
   },
   async saveSeenIntro(uid) {
     if (!supabase) return;
-    await supabase.from("profiles").upsert({id:uid,seen_intro:true,updated_at:new Date().toISOString()});
+    await supabase.from("profiles").update({seen_intro:true,updated_at:new Date().toISOString()}).eq("id",uid);
   },
   async loadSeenIntro(uid) {
     if (!supabase) return false;
@@ -4479,7 +4482,7 @@ function MealPlanScreen({weeklyPlan,mealList,targets,lang,numMeals,onGenerate,on
   const dayPlan=weeklyPlan[selDay]||{};
 
   // Totale giornaliero del giorno selezionato
-  const dayTot = totals(Object.values(dayPlan).flat());
+  const dayTot = totals(Object.values(dayPlan).filter(Array.isArray).flat());
 
   return (
     <div style={{...ss,overflowY:"auto",paddingBottom:70}}>
@@ -6236,6 +6239,8 @@ export default function App() {
 
   const loadingRef=useRef(false);
   const subRef=useRef(null);
+  const userRef=useRef(null);
+  useEffect(()=>{ userRef.current=user; },[user]);
   useEffect(()=>{
     // Sincronizza database alimenti da Supabase in background
     syncFoodsFromSupabase();
@@ -6243,12 +6248,21 @@ export default function App() {
     // Evita doppia subscription (React StrictMode)
     if(subRef.current) return;
     const {data:{subscription}}=supabase.auth.onAuthStateChange(async(event,sess)=>{
-      if(event==="SIGNED_OUT"){ setUser(null); setOnboarded(false); setReady(true); return; }
+      if(event==="SIGNED_OUT"){
+        loadingRef.current=false;
+        setUser(null); setOnboarded(false);
+        setProfile({name:"",gender:"m",age:"",weight:"",height:"",bodyFat:"",activity:1.55,goal:"lose",numMeals:3,excludedFoods:[],bia_fm:"",bia_vf:"",bia_bmr:"",bia_ffm:"",bia_sc_fat:"",bia_smi:"",bia_whr:"",bia_smm:""});
+        setTargets(null); setMealList([]); setMeals({}); setPantry([]); setWeightLog([]);
+        setWeeklyPlan(null); setPlanSeed(0); setFavMeals([]); setSavedPlans([]);
+        setNutritionLogs([]); setConfirmedMeals({}); setLockedMeals({});
+        setCustomFoods([]); setMealRatings({}); setWorkoutLogs([]);
+        setReady(true); return;
+      }
       if(sess?.user) {
         if(loadingRef.current) return;
         loadingRef.current=true;
-        await loadUser(sess.user);
-        loadingRef.current=false;
+        setReady(false);
+        try { await loadUser(sess.user); } finally { loadingRef.current=false; }
       } else if(!loadingRef.current) {
         setReady(true);
       }
@@ -6262,16 +6276,24 @@ export default function App() {
 
   // Controlla peso ogni volta che l'app torna in foreground
   useEffect(()=>{
-    const handleVisibility=()=>{
+    const handleVisibility=async()=>{
       if(document.visibilityState==="visible"){
         const wl=LS.g("nc2-weightlog")||[];
         checkWeightPrompt(wl);
+        if(supabase){
+          try {
+            const sessionPromise=supabase.auth.getSession();
+            const timeoutPromise=new Promise(resolve=>setTimeout(()=>resolve({data:{session:null}}),5000));
+            const {data:{session}}=await Promise.race([sessionPromise,timeoutPromise]);
+            if(!session&&userRef.current){ setUser(null); setOnboarded(false); }
+          } catch(e){ console.warn("visibilitychange getSession error:",e); }
+        }
       }
     };
     document.addEventListener("visibilitychange",handleVisibility);
     return ()=>document.removeEventListener("visibilitychange",handleVisibility);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[weightLog]);
+  },[]);
 
   // Bug 7 fix: azzera confirmedMeals al cambio di giorno (app aperta attraverso mezzanotte)
   useEffect(()=>{
@@ -6479,14 +6501,20 @@ export default function App() {
     });
   };
   const saveMeals=ms=>{ LS.s(`nc2-meals${user?"-"+user.id:""}-${today}`,ms); if(user) DB.saveMeals(user.id,today,ms).catch(e=>console.error("saveMeals error:",e)); };
-  const profileToDB = pr => ({
-    name: pr.name, gender: pr.gender, age: pr.age, weight: pr.weight,
-    height: pr.height, body_fat: pr.bodyFat||null, activity: pr.activity,
-    goal: pr.goal, num_meals: pr.numMeals, excluded_foods: pr.excludedFoods||[],
-    bia_fm: pr.bia_fm||null, bia_vf: pr.bia_vf||null, bia_bmr: pr.bia_bmr||null,
-    bia_ffm: pr.bia_ffm||null, bia_sc_fat: pr.bia_sc_fat||null,
-    bia_smi: pr.bia_smi||null, bia_whr: pr.bia_whr||null, bia_smm: pr.bia_smm||null,
-  });
+  const profileToDB = pr => {
+    const d = {
+      name: pr.name, gender: pr.gender, age: pr.age, weight: pr.weight,
+      height: pr.height, body_fat: pr.bodyFat||null, activity: pr.activity,
+      goal: pr.goal, num_meals: pr.numMeals, excluded_foods: pr.excludedFoods||[],
+      bia_fm: pr.bia_fm||null, bia_vf: pr.bia_vf||null, bia_bmr: pr.bia_bmr||null,
+      bia_ffm: pr.bia_ffm||null, bia_sc_fat: pr.bia_sc_fat||null,
+      bia_smi: pr.bia_smi||null, bia_whr: pr.bia_whr||null, bia_smm: pr.bia_smm||null,
+    };
+    // Strip null BIA fields — upsert with null would overwrite existing DB values with NULL
+    ["bia_fm","bia_vf","bia_bmr","bia_ffm","bia_sc_fat","bia_smi","bia_whr","bia_smm"]
+      .forEach(k=>{ if(d[k]===null) delete d[k]; });
+    return d;
+  };
   const saveProfile=pr=>{ LS.s(`nc2-profile${user?"-"+user.id:""}`,pr); if(user) DB.saveProfile(user.id,profileToDB(pr)).catch(e=>console.error("saveProfile error:",e)); };
 
   const completeOnboarding=(pr,tg,currentUser,presetDiet=null)=>{

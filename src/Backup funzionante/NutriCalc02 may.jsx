@@ -37,17 +37,10 @@ const supabase = (() => {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
-      lock: (() => {
-        let _lockQueue = Promise.resolve();
-        return async (name, acquireTimeout, fn) => {
-          let release;
-          const next = new Promise(r => { release = r; });
-          const prev = _lockQueue;
-          _lockQueue = next;
-          await prev;
-          try { return await fn(); } finally { release(); }
-        };
-      })(),
+      lock: async (name, acquireTimeout, fn) => {
+        // Bypass navigator.locks - esegui direttamente senza lock
+        return await fn();
+      },
     },
   });
   window[_sbKey] = client;
@@ -122,7 +115,7 @@ const LS = {
 const DB = {
   async saveProfile(uid, d) { if (!supabase) return; const { error } = await supabase.from("profiles").upsert({ id:uid, ...d, updated_at:new Date().toISOString() }); if (error) console.error("saveProfile error:", error); },
   async loadProfile(uid) { if (!supabase) return null; const { data, error } = await supabase.from("profiles").select("*").eq("id",uid).single(); if (error && error.code !== 'PGRST116') console.error("loadProfile error:", error); return data || null; },
-  async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").update({ weight_skip_date:date, updated_at:new Date().toISOString() }).eq("id",uid); },
+  async saveWeightSkip(uid, date) { if (!supabase) return; await supabase.from("profiles").upsert({ id:uid, weight_skip_date:date, updated_at:new Date().toISOString() }); },
   async loadWeightSkip(uid) { if (!supabase) return null; const { data } = await supabase.from("profiles").select("weight_skip_date").eq("id",uid).single(); return data?.weight_skip_date||null; },
   async saveWeeklyPlan(uid, plan, seed) {
     if (!supabase) return;
@@ -144,7 +137,7 @@ const DB = {
   },
   async saveSeenIntro(uid) {
     if (!supabase) return;
-    await supabase.from("profiles").update({seen_intro:true,updated_at:new Date().toISOString()}).eq("id",uid);
+    await supabase.from("profiles").upsert({id:uid,seen_intro:true,updated_at:new Date().toISOString()});
   },
   async loadSeenIntro(uid) {
     if (!supabase) return false;
@@ -1370,8 +1363,8 @@ function optimize(foods, tgt) {
   if (pIdx.length > 0) {
     const totalP = pIdx.reduce((s, i) => s + foods[i].p, 0);
     if (totalP > 0) {
-      const equalQty = (tgt.protein / totalP) * 100;
-      pIdx.forEach(i => { q[i] = Math.max(minQ[i], Math.min(maxQ[i], equalQty)); });
+      const qPerFood = (tgt.protein / totalP) * 100 / pIdx.length;
+      pIdx.forEach(i => { q[i] = Math.max(minQ[i], Math.min(maxQ[i], qPerFood)); });
     }
   }
 
@@ -1434,8 +1427,7 @@ function filterRealisticItems(items, tgt) {
     const div = it.food.unit === "pz" ? 1 : 100;
     const isVeg = (it.food.cal || 0) < 50; // verdure: bassa densità calorica, non eliminare
     if (isVeg) return true;
-    const threshold = totalCal < 800 ? 0.05 : 0.02;
-    return (it.food.cal * it.quantity / div) / totalCal >= threshold;
+    return (it.food.cal * it.quantity / div) / totalCal >= 0.02;
   });
   const kept = filtered.length >= 2 ? filtered : items.slice(0, 2);
   // Re-ottimizza le quantità sui soli alimenti rimasti
@@ -1782,14 +1774,8 @@ function generateWeeklyPlan(targets, mealList, seed=0, numMeals, excludedFoods=[
       const templates = WEEK_RECIPES[recipeKey] || WEEK_RECIPES["Pranzo"];
       const template = templates[(day + seed) % templates.length];
       // Usa direttamente gli alimenti della ricetta (già appetibili per costruzione)
-      let foods = template.foods.map(n => findFood(n)).filter(Boolean).filter(f => !isExcluded(f.name, excludedFoods));
-      const missing = template.foods.filter(n => !findFood(n));
-      if (missing.length) console.warn(`Missing foods in recipe "${template.name}": ${missing.join(", ")}`);
-      if (!foods.length) {
-        const defaultFood = ALL_FOODS.find(f => f.name === "Petto di pollo");
-        if (defaultFood) foods = [defaultFood];
-        else { dayMeals[mKey] = []; return; }
-      }
+      const foods = template.foods.map(n => findFood(n)).filter(Boolean).filter(f => !isExcluded(f.name, excludedFoods));
+      if (!foods.length) { dayMeals[mKey] = []; return; }
       const qtys = optimize(foods, mTgt);
       const rawItems = foods.map((food, i) => ({ food, quantity: qtys[i], recipeName: template.name }));
       dayMeals[mKey] = filterRealisticItems(rawItems, mTgt);
@@ -1912,7 +1898,7 @@ const NAV_ICONS = {
   ),
   piano: (active) => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="5" width="18" height="16" rx="3" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.8" fill={active?"url(#ng4)":"none"} fillOpacity={active ? 0.15 : 0}/>
+      <rect x="3" y="5" width="18" height="16" rx="3" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.8" fill={active?"url(#ng4)":"none"} fillOpacity={active?.15:0}/>
       <line x1="3" y1="10" x2="21" y2="10" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.5"/>
       <line x1="8" y1="3" x2="8" y2="7" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.8" strokeLinecap="round"/>
       <line x1="16" y1="3" x2="16" y2="7" stroke={active?"url(#ng4)":C.mid} strokeWidth="1.8" strokeLinecap="round"/>
@@ -2426,7 +2412,7 @@ function AuthScreen({onAuth}) {
           </div>
         )}
         {err && <div style={{background:C.rLo,border:`1px solid ${C.red}44`,borderRadius:14,padding:"12px 16px",color:C.red,fontSize:13,marginBottom:16,fontWeight:600}}>{err}</div>}
-        <button onClick={submit} disabled={loading} style={{...bP,marginBottom:14,opacity:loading ? 0.6 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <button onClick={submit} disabled={loading} style={{...bP,marginBottom:14,opacity:loading?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           {loading?<Spin size={18} color="#060A10"/>:mode==="login"?t("signIn",_lang):t("createAccount",_lang)}
         </button>
         {supabase && (
@@ -3512,7 +3498,7 @@ function OnlineSearchScreen({onBack,onSaveToDb}) {
         </div>
         <div style={{display:"flex",gap:8,marginBottom:8}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doSearch()} placeholder="es. Mulino Bianco, pane di casa..." style={{...inp,flex:1}}/>
-          <button onClick={doSearch} disabled={loading} style={{padding:"0 18px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:14,opacity:loading ? 0.6 : 1}}>
+          <button onClick={doSearch} disabled={loading} style={{padding:"0 18px",background:C.acc,border:"none",borderRadius:14,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:ff,fontSize:14,opacity:loading?.6:1}}>
             {loading?<Spin size={16} color="#fff"/>:"🔍"}
           </button>
         </div>
@@ -4493,7 +4479,7 @@ function MealPlanScreen({weeklyPlan,mealList,targets,lang,numMeals,onGenerate,on
   const dayPlan=weeklyPlan[selDay]||{};
 
   // Totale giornaliero del giorno selezionato
-  const dayTot = totals(Object.values(dayPlan).filter(Array.isArray).flat());
+  const dayTot = totals(Object.values(dayPlan).flat());
 
   return (
     <div style={{...ss,overflowY:"auto",paddingBottom:70}}>
@@ -6250,8 +6236,6 @@ export default function App() {
 
   const loadingRef=useRef(false);
   const subRef=useRef(null);
-  const userRef=useRef(null);
-  useEffect(()=>{ userRef.current=user; },[user]);
   useEffect(()=>{
     // Sincronizza database alimenti da Supabase in background
     syncFoodsFromSupabase();
@@ -6259,21 +6243,12 @@ export default function App() {
     // Evita doppia subscription (React StrictMode)
     if(subRef.current) return;
     const {data:{subscription}}=supabase.auth.onAuthStateChange(async(event,sess)=>{
-      if(event==="SIGNED_OUT"){
-        loadingRef.current=false;
-        setUser(null); setOnboarded(false);
-        setProfile({name:"",gender:"m",age:"",weight:"",height:"",bodyFat:"",activity:1.55,goal:"lose",numMeals:3,excludedFoods:[],bia_fm:"",bia_vf:"",bia_bmr:"",bia_ffm:"",bia_sc_fat:"",bia_smi:"",bia_whr:"",bia_smm:""});
-        setTargets(null); setMealList([]); setMeals({}); setPantry([]); setWeightLog([]);
-        setWeeklyPlan(null); setPlanSeed(0); setFavMeals([]); setSavedPlans([]);
-        setNutritionLogs([]); setConfirmedMeals({}); setLockedMeals({});
-        setCustomFoods([]); setMealRatings({}); setWorkoutLogs([]);
-        setReady(true); return;
-      }
+      if(event==="SIGNED_OUT"){ setUser(null); setOnboarded(false); setReady(true); return; }
       if(sess?.user) {
         if(loadingRef.current) return;
         loadingRef.current=true;
-        setReady(false);
-        try { await loadUser(sess.user); } finally { loadingRef.current=false; }
+        await loadUser(sess.user);
+        loadingRef.current=false;
       } else if(!loadingRef.current) {
         setReady(true);
       }
@@ -6287,26 +6262,16 @@ export default function App() {
 
   // Controlla peso ogni volta che l'app torna in foreground
   useEffect(()=>{
-    const handleVisibility=async()=>{
+    const handleVisibility=()=>{
       if(document.visibilityState==="visible"){
         const wl=LS.g("nc2-weightlog")||[];
         checkWeightPrompt(wl);
-        if(supabase){
-          try {
-            const {data:{session}}=await supabase.auth.getSession();
-            if(!session&&userRef.current){
-              await new Promise(r=>setTimeout(r,500));
-              const {data:{session:s2}}=await supabase.auth.getSession();
-              if(!s2&&userRef.current){ setUser(null); setOnboarded(false); }
-            }
-          } catch(e){ console.warn("visibilitychange getSession error:",e); }
-        }
       }
     };
     document.addEventListener("visibilitychange",handleVisibility);
     return ()=>document.removeEventListener("visibilitychange",handleVisibility);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  },[weightLog]);
 
   // Bug 7 fix: azzera confirmedMeals al cambio di giorno (app aperta attraverso mezzanotte)
   useEffect(()=>{
@@ -6514,23 +6479,14 @@ export default function App() {
     });
   };
   const saveMeals=ms=>{ LS.s(`nc2-meals${user?"-"+user.id:""}-${today}`,ms); if(user) DB.saveMeals(user.id,today,ms).catch(e=>console.error("saveMeals error:",e)); };
-  const profileToDB = pr => {
-    const d = {
-      name: pr.name, gender: pr.gender, age: pr.age, weight: pr.weight,
-      height: pr.height, body_fat: pr.bodyFat||null, activity: pr.activity,
-      goal: pr.goal, num_meals: pr.numMeals, excluded_foods: pr.excludedFoods||[],
-      bia_fm: pr.bia_fm||null, bia_vf: pr.bia_vf||null, bia_bmr: pr.bia_bmr||null,
-      bia_ffm: pr.bia_ffm||null, bia_sc_fat: pr.bia_sc_fat||null,
-      bia_smi: pr.bia_smi||null, bia_whr: pr.bia_whr||null, bia_smm: pr.bia_smm||null,
-    };
-    // Strip null BIA fields — upsert with null would overwrite existing DB values with NULL
-    ["bia_fm","bia_vf","bia_bmr","bia_ffm","bia_sc_fat","bia_smi","bia_whr","bia_smm"]
-      .forEach(k=>{
-        if(d[k]===null||d[k]===""||d[k]===undefined) delete d[k];
-        else { d[k]=parseFloat(d[k]); if(isNaN(d[k])) delete d[k]; }
-      });
-    return d;
-  };
+  const profileToDB = pr => ({
+    name: pr.name, gender: pr.gender, age: pr.age, weight: pr.weight,
+    height: pr.height, body_fat: pr.bodyFat||null, activity: pr.activity,
+    goal: pr.goal, num_meals: pr.numMeals, excluded_foods: pr.excludedFoods||[],
+    bia_fm: pr.bia_fm||null, bia_vf: pr.bia_vf||null, bia_bmr: pr.bia_bmr||null,
+    bia_ffm: pr.bia_ffm||null, bia_sc_fat: pr.bia_sc_fat||null,
+    bia_smi: pr.bia_smi||null, bia_whr: pr.bia_whr||null, bia_smm: pr.bia_smm||null,
+  });
   const saveProfile=pr=>{ LS.s(`nc2-profile${user?"-"+user.id:""}`,pr); if(user) DB.saveProfile(user.id,profileToDB(pr)).catch(e=>console.error("saveProfile error:",e)); };
 
   const completeOnboarding=(pr,tg,currentUser,presetDiet=null)=>{
@@ -6790,11 +6746,7 @@ export default function App() {
     const mKey=resolveItalianMealKey(mealNameArg||selMeal||"");
     const recipes=WEEK_RECIPES[mKey]||WEEK_RECIPES["Pranzo"];
     // Usa selezione basata su ricetta (Opzione A): compatibilità culinaria garantita
-    const result=selectPantryFoodsForRecipe(mealNameArg||selMeal||"", available, recipes, rotIdx, mealRatings||{});
-    if(!result||!result.length){
-      alert(lang==="en"?"No suitable foods found in pantry for this meal.":"Nessun alimento adatto in credenza per questo pasto.");
-    }
-    return result;
+    return selectPantryFoodsForRecipe(mealNameArg||selMeal||"", available, recipes, rotIdx, mealRatings||{});
   };
 
   // Seleziona i migliori cibi dalla Credenza in base all'obiettivo (usato da generateMeal)
