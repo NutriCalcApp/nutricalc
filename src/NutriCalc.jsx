@@ -6276,6 +6276,12 @@ export default function App() {
         setCustomFoods([]); setMealRatings({}); setWorkoutLogs([]);
         setReady(true); return;
       }
+      // TOKEN_REFRESHED / USER_UPDATED: il dato utente non è cambiato, solo il JWT.
+      // Non mostrare la loading screen né ricaricare tutto — aggiorna solo l'oggetto utente.
+      if(event==="TOKEN_REFRESHED"||event==="USER_UPDATED"){
+        if(sess?.user) setUser(sess.user);
+        return;
+      }
       if(sess?.user) {
         if(loadingRef.current) return;
         loadingRef.current=true;
