@@ -6300,12 +6300,11 @@ export default function App() {
         checkWeightPrompt(wl);
         if(supabase){
           try {
-            const {data:{session}}=await supabase.auth.getSession();
-            if(!session&&userRef.current){
-              await new Promise(r=>setTimeout(r,500));
-              const {data:{session:s2}}=await supabase.auth.getSession();
-              if(!s2&&userRef.current){ setUser(null); setOnboarded(false); }
-            }
+            const {data:{session}}=await Promise.race([
+              supabase.auth.getSession(),
+              new Promise(r=>setTimeout(()=>r({data:{session:null}}),5000))
+            ]);
+            if(!session&&userRef.current){ setUser(null); setOnboarded(false); }
           } catch(e){ console.warn("visibilitychange getSession error:",e); }
         }
       }
