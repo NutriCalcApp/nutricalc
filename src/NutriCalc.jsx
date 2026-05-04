@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Html5Qrcode } from "html5-qrcode";
 let _lang = localStorage.getItem("nc2-lang")||"it";
@@ -6251,6 +6251,13 @@ export default function App() {
   const loadingRef=useRef(false);
   const subRef=useRef(null);
   const userRef=useRef(null);
+  useEffect(()=>{
+    if(!document.getElementById('nc-fonts')){
+      const el=document.createElement('style');
+      el.id='nc-fonts'; el.textContent=FONTS;
+      document.head.appendChild(el);
+    }
+  },[]);
   useEffect(()=>{ userRef.current=user; },[user]);
   useEffect(()=>{
     // Sincronizza database alimenti da Supabase in background
@@ -6268,6 +6275,12 @@ export default function App() {
         setNutritionLogs([]); setConfirmedMeals({}); setLockedMeals({});
         setCustomFoods([]); setMealRatings({}); setWorkoutLogs([]);
         setReady(true); return;
+      }
+      // TOKEN_REFRESHED / USER_UPDATED: il dato utente non è cambiato, solo il JWT.
+      // Non mostrare la loading screen né ricaricare tutto — aggiorna solo l'oggetto utente.
+      if(event==="TOKEN_REFRESHED"||event==="USER_UPDATED"){
+        if(sess?.user) setUser(sess.user);
+        return;
       }
       if(sess?.user) {
         if(loadingRef.current) return;
@@ -6293,12 +6306,11 @@ export default function App() {
         checkWeightPrompt(wl);
         if(supabase){
           try {
-            const {data:{session}}=await supabase.auth.getSession();
-            if(!session&&userRef.current){
-              await new Promise(r=>setTimeout(r,500));
-              const {data:{session:s2}}=await supabase.auth.getSession();
-              if(!s2&&userRef.current){ setUser(null); setOnboarded(false); }
-            }
+            const {data:{session}}=await Promise.race([
+              supabase.auth.getSession(),
+              new Promise(r=>setTimeout(()=>r({data:{session:null}}),5000))
+            ]);
+            if(!session&&userRef.current){ setUser(null); setOnboarded(false); }
           } catch(e){ console.warn("visibilitychange getSession error:",e); }
         }
       }
@@ -6310,6 +6322,17 @@ export default function App() {
 
   // Bug 7 fix: azzera confirmedMeals al cambio di giorno (app aperta attraverso mezzanotte)
   useEffect(()=>{
+    const purgeStaleCustomized=()=>{
+      const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-7);
+      Object.keys(localStorage).filter(k=>k.startsWith("nc2-customized-")).forEach(k=>{
+        const parts=k.replace("nc2-customized-","").split("-").map(Number);
+        if(parts.length===3&&parts.every(n=>!isNaN(n))){
+          const d=new Date(parts[0],parts[1]-1,parts[2]);
+          if(d<cutoff) localStorage.removeItem(k);
+        }
+      });
+    };
+    purgeStaleCustomized();
     let lastDay=localDateStr();
     const interval=setInterval(()=>{
       const newDay=localDateStr();
@@ -6319,6 +6342,7 @@ export default function App() {
         LS.s(`nc2-confirmed-${newDay}`,{});
         setLockedMeals({});
         LS.s(`nc2-locked-${newDay}`,{});
+        purgeStaleCustomized();
       }
     },60000);
     return ()=>clearInterval(interval);
@@ -7068,19 +7092,32 @@ export default function App() {
     setOnboarded(false);
   };
 
+  const allTot = useMemo(() => {
+    const activeNames = new Set(mealList.map(m => m.name));
+    return totals(Object.entries(meals).filter(([k]) => activeNames.has(k)).flatMap(([, v]) => v));
+  }, [meals, mealList]);
+
+  const todayPlanIdx = (new Date().getDay() + 6) % 7;
+  const planMealTargets = useMemo(() => {
+    if (!weeklyPlan || !mealList.length) return null;
+    const dayPlan = weeklyPlan[todayPlanIdx] || {};
+    const out = {};
+    mealList.forEach(meal => {
+      const items = dayPlan[meal.name] || [];
+      if (!items.length) { out[meal.name] = mealTarget(targets, meal.name, profile.numMeals); return; }
+      const t2 = totals(items);
+      out[meal.name] = { calories: Math.round(t2.cal), protein: Math.round(t2.p), carbs: Math.round(t2.c), fat: Math.round(t2.f) };
+    });
+    return out;
+  }, [weeklyPlan, mealList, targets, profile.numMeals, todayPlanIdx]);
+
   if(!langChosen) return <LangSelectScreen onSelect={selectLang}/>;
   if(!ready) return <div style={{...ss,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}><style>{FONTS}</style><Spin size={32}/></div>;
   if(showIntro) return <WelcomeSlideshow onDone={()=>{ LS.s('nc2-seen-intro',true); setShowIntro(false); setTab("profile"); if(user) DB.saveSeenIntro(user.id).catch(()=>{}); }}/>;
   if(supabase&&!user) return <AuthScreen onAuth={loadUser}/>;
   if(!onboarded) return <OnboardingScreen user={user} isNewUser={!LS.g(`nc2-onboarded${user?"-"+user?.id:""}`)} onComplete={(pr,tg,presetDiet)=>completeOnboarding(pr,tg,user,presetDiet)}/>;
 
-  const activeMealNames=new Set(mealList.map(m=>m.name));
-  const allTot=totals(Object.entries(meals).filter(([k])=>activeMealNames.has(k)).flatMap(([,v])=>v));
   const mealData=mealList.find(m=>m.name===selMeal);
-
-  // todayPlanIdx deve essere definito PRIMA di mealItems
-  const jsDay=new Date().getDay();
-  const todayPlanIdx=(jsDay+6)%7;
 
   // Fallback a planDay quando meals[selMeal] è vuoto (dati nel piano settimanale)
   const _todayPlanDay = weeklyPlan ? weeklyPlan[todayPlanIdx] : null;
@@ -7088,26 +7125,6 @@ export default function App() {
     ? meals[selMeal]
     : (_todayPlanDay?.[selMeal] || []);
   const mealTot=totals(mealItems);
-  const planMealTargets = (() => {
-    if (!weeklyPlan || !mealList.length) return null;
-    const dayPlan = weeklyPlan[todayPlanIdx] || {};
-    const out = {};
-    mealList.forEach(meal => {
-      const items = dayPlan[meal.name] || [];
-      if (!items.length) {
-        out[meal.name] = mealTarget(targets, meal.name, profile.numMeals);
-        return;
-      }
-      const t2 = totals(items);
-      out[meal.name] = {
-        calories: Math.round(t2.cal),
-        protein:  Math.round(t2.p),
-        carbs:    Math.round(t2.c),
-        fat:      Math.round(t2.f),
-      };
-    });
-    return out;
-  })();
 
   const getMealTarget = (mealName) =>
     (planMealTargets && planMealTargets[mealName]) || mealTarget(targets, mealName, profile.numMeals);
@@ -7116,7 +7133,6 @@ export default function App() {
     const pmd=mealList.find(m=>m.name===photoMealName);
     return (
       <>
-        <style>{FONTS}</style>
         <div style={ss}>
           <PhotoMealScreen mealName={photoMealName} mealData={pmd} lang={lang} onBack={()=>setPhotoMealName(null)} onConfirm={photoItems=>{
           // Se siamo in modalità piano (isCustomized=false), copiamo prima i dati
@@ -7141,7 +7157,6 @@ export default function App() {
 
   if(tab==="progress") return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <DietProgressScreen targets={targets} nutritionLogs={nutritionLogs} workoutLogs={workoutLogs} lang={lang} onBack={()=>setTab("today")} onSaveWorkout={saveWorkout} onRemoveWorkout={removeWorkout}/>
       </div>
@@ -7159,7 +7174,6 @@ export default function App() {
 
   if(showDietLibrary) return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <DietLibraryScreen
           weeklyPlan={weeklyPlan}
@@ -7177,7 +7191,6 @@ export default function App() {
 
   if(tab==="piano"&&planSelMeal) return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <PlanMealDetailScreen
           mealName={planSelMeal.mealName} dayIdx={planSelMeal.dayIdx}
@@ -7195,7 +7208,6 @@ export default function App() {
 
   if(tab==="piano"&&!planSelMeal) return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <MealPlanScreen weeklyPlan={weeklyPlan} mealList={mealList} targets={targets} lang={lang} numMeals={profile.numMeals}
           onGenerate={handleGeneratePlan} onGenerateFromPantry={handleGeneratePlanFromPantry}
@@ -7211,7 +7223,6 @@ export default function App() {
 
   if(subScreen==="piano"&&!planSelMeal) return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <MealPlanScreen weeklyPlan={weeklyPlan} mealList={mealList} targets={targets} lang={lang} numMeals={profile.numMeals}
           onGenerate={handleGeneratePlan} onGenerateFromPantry={handleGeneratePlanFromPantry}
@@ -7226,7 +7237,6 @@ export default function App() {
 
   if(subScreen==="piano"&&planSelMeal) return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <PlanMealDetailScreen
           mealName={planSelMeal.mealName} dayIdx={planSelMeal.dayIdx}
@@ -7244,7 +7254,6 @@ export default function App() {
 
   if(subScreen==="import") return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <ImportDietScreen lang={lang} mealList={mealList}
           onBack={()=>setSubScreen(null)}
@@ -7274,7 +7283,6 @@ export default function App() {
 
   if(subScreen==="diary"||tab==="diary") return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <DiaryScreen lang={lang} pantry={pantry} customFoods={customFoods} onBack={()=>{ subScreen==="diary"?setSubScreen(null):setTab("today"); }}/>
       </div>
@@ -7286,7 +7294,6 @@ export default function App() {
 
   if(selMeal) return (
     <>
-      <style>{FONTS}</style>
       <div style={ss}>
         <MealDetailScreen mealName={selMeal} mealData={mealData} items={mealItems} tot={mealTot} target={getMealTarget(selMeal)} pantry={pantry} customFoods={customFoods}
           favMeals={favMeals.filter(f=>f.mealType===selMeal)} lang={lang}
@@ -7307,7 +7314,6 @@ export default function App() {
 
   return (
     <div key={lang} style={{...ss,paddingBottom:70}}>
-      <style>{FONTS}</style>
       {showWeightModal&&<WeightModal profile={profile} onSave={logWeight} onSkip={()=>{ LS.s("nc2-weight-skip-date",today); setShowWeightModal(false); if(user) DB.saveWeightSkip(user.id,today); }} lang={lang}/>}
       {tab==="today"&&!pantryEditMeal&&<TodayScreen targets={targets} mealList={mealList} meals={meals} weeklyPlan={weeklyPlan} isCustomized={isCustomized} allTot={allTot} planMealTargets={planMealTargets} profile={profile} lang={lang} weightLog={weightLog} confirmedMeals={confirmedMeals} lockedMeals={lockedMeals} onConfirmMeal={confirmMeal} onUnlockMeal={unlockMeal} customFoods={customFoods} onMealClick={name=>{
           const todayIdx2=(new Date().getDay()+6)%7;

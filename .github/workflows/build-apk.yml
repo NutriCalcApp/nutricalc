@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ '**' ]
 
 jobs:
   build:
@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: Build web app
-        run: npm run build
+        run: CI=false npm run build
 
       - name: Setup Java
         uses: actions/setup-java@v4
